@@ -7,8 +7,7 @@ import (
 	"time"
 )
 
-const GenesisJson = `
-{
+const GenesisJson = `{
   "genesis_time": "2021-03-17T02:59:45.008883+00:00",
   "chain_id": "the-yarbit-ledger",
   "balances": {

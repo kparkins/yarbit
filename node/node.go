@@ -30,6 +30,11 @@ type TxAddResponse struct {
 	Hash database.Hash `json:"block_hash"`
 }
 
+type NodeStatusResponse struct {
+	Hash   database.Hash `json:"block_hash"`
+	Number uint64        `json:"block_number"`
+}
+
 func Run(dataDir string) error {
 	state, err := database.NewStateFromDisk(dataDir)
 	if err != nil {
@@ -42,6 +47,9 @@ func Run(dataDir string) error {
 	})
 	http.HandleFunc("/tx/add", func(writer http.ResponseWriter, request *http.Request) {
 		txAddHandler(writer, request, state)
+	})
+	http.HandleFunc("/node/status", func(writer http.ResponseWriter, request *http.Request) {
+		nodeStatusHandler(writer, request, state)
 	})
 	return http.ListenAndServe(fmt.Sprintf(":%d", Port), nil)
 }
@@ -78,6 +86,14 @@ func txAddHandler(w http.ResponseWriter, r *http.Request, state *database.State)
 		return
 	}
 	writeResponse(w, TxAddResponse{Hash: hash})
+}
+
+func nodeStatusHandler(w http.ResponseWriter, r *http.Request, state *database.State) {
+	response := NodeStatusResponse{
+		Hash: state.LatestBlockHash(),
+		Number: state.LatestBlockNumber(),
+	}
+	writeResponse(w, response)
 }
 
 func writeResponse(w http.ResponseWriter, content interface{}) {

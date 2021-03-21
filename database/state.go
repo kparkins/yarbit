@@ -137,3 +137,7 @@ func (s *State) applyBlocK(block Block) error {
 func (s *State) LatestBlockHash() Hash {
 	return s.lastBlockHash
 }
+
+func (s *State) LatestBlockNumber() uint64 {
+	return s.lastBlock.Header.Number
+}

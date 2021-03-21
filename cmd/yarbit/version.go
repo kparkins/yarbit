@@ -6,9 +6,9 @@ import (
 )
 
 const FixVersion = "0"
-const MinorVersion = "3"
+const MinorVersion = "4"
 const MajorVersion = "0"
-const Description = "The Yarbit Ledger - HTTP API"
+const Description = "The Yarbit Ledger - Node Status"
 
 func versionCommand() *cobra.Command {
 	return &cobra.Command{

@@ -2,10 +2,13 @@ package node
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/kparkins/yarbit/database"
 	"io/ioutil"
 	"net/http"
 )
+
+const Port = 80
 
 type ErrorResponse struct {
 	Error string `json:"error"`
@@ -40,7 +43,7 @@ func Run(dataDir string) error {
 	http.HandleFunc("/tx/add", func(writer http.ResponseWriter, request *http.Request) {
 		txAddHandler(writer, request, state)
 	})
-	return http.ListenAndServe(":8080", nil)
+	return http.ListenAndServe(fmt.Sprintf(":%d", Port), nil)
 }
 
 func balanceListHandler(w http.ResponseWriter, r *http.Request, state *database.State) {
@@ -53,6 +56,7 @@ func txAddHandler(w http.ResponseWriter, r *http.Request, state *database.State)
 		writeErrorResponse(w, err, http.StatusInternalServerError)
 		return
 	}
+	defer r.Body.Close()
 	txRequest := TxAddRequest{}
 	if err := json.Unmarshal(content, &txRequest); err != nil {
 		writeErrorResponse(w, err, http.StatusBadRequest)

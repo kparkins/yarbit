@@ -13,6 +13,8 @@ func main() {
 		Use: "yarbit",
 		Short: "The yarbit command.",
 		Run: func(cmd *cobra.Command, args []string) {
+			cmd.Help()
+			os.Exit(0)
 		},
 	}
 

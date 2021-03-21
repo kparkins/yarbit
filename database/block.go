@@ -12,6 +12,7 @@ type BlockFs struct {
 
 type BlockHeader struct {
 	Parent Hash   `json:"parent"`
+	Number uint64 `json:"number"`
 	Time   uint64 `json:"time"`
 }
 
@@ -20,10 +21,11 @@ type Block struct {
 	Txs    []Tx        `json:"payload"`
 }
 
-func NewBlock(parent Hash, time uint64, txs []Tx) Block {
+func NewBlock(parent Hash, number, time uint64, txs []Tx) Block {
 	return Block{
 		Header: BlockHeader{
 			Parent: parent,
+			Number: number,
 			Time:   time,
 		},
 		Txs: txs,
@@ -31,7 +33,7 @@ func NewBlock(parent Hash, time uint64, txs []Tx) Block {
 }
 
 func (b *Block) Hash() (Hash, error) {
-	encoded, err := json.Marshal(b)
+	encoded, err := json.Marshal(*b)
 	if err != nil {
 		return Hash{}, err
 	}

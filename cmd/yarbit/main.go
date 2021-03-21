@@ -21,6 +21,7 @@ func main() {
 	command.AddCommand(versionCommand())
 	command.AddCommand(balancesCommand())
 	command.AddCommand(runCommand())
+	command.AddCommand(migrateCommand())
 
 	err := command.Execute()
 	if err != nil {

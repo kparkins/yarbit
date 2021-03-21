@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"time"
 )
 
@@ -13,6 +14,7 @@ type State struct {
 	txMempool     []Tx
 	blockDb       *os.File
 	lastBlockHash Hash
+	lastBlock     Block
 }
 
 func NewStateFromDisk(dataDir string) (*State, error) {
@@ -33,7 +35,9 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 		txMempool:     make([]Tx, 0),
 		blockDb:       blockDb,
 		lastBlockHash: Hash{},
+		lastBlock: NewBlock(Hash{}, 0, 0, make([]Tx, 0)),
 	}
+
 	scanner := bufio.NewScanner(blockDb)
 	for scanner.Scan() {
 		if err = scanner.Err(); err != nil {
@@ -47,6 +51,7 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 			return nil, err
 		}
 		state.lastBlockHash = blockFileObject.Key
+		state.lastBlock = blockFileObject.Value
 	}
 	return state, nil
 }
@@ -69,13 +74,23 @@ func (s *State) AddBlock(block Block) error {
 }
 
 func (s *State) Persist() (Hash, error) {
-	block := NewBlock(s.lastBlockHash, uint64(time.Now().Unix()), s.txMempool)
+	block := NewBlock(
+		s.lastBlockHash,
+		s.lastBlock.Header.Number,
+		uint64(time.Now().Unix()),
+		s.txMempool,
+	)
+	// Hack to force the sequence number to 0 for the first block. This is all because the way we are
+	// adding blocks and saving state is buggy in this version. Need to refactor this file.
+	if !reflect.DeepEqual(Hash{}, s.lastBlockHash) {
+		block.Header.Number++
+	}
 	hash, err := block.Hash()
 	if err != nil {
 		return Hash{}, err
 	}
 	blockFile := BlockFs{
-		Key: hash,
+		Key:   hash,
 		Value: block,
 	}
 	blockFileJson, err := json.Marshal(blockFile)
@@ -88,6 +103,7 @@ func (s *State) Persist() (Hash, error) {
 		return Hash{}, err
 	}
 	s.lastBlockHash = hash
+	s.lastBlock = block
 	s.txMempool = make([]Tx, 0)
 	return s.lastBlockHash, nil
 }

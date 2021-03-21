@@ -19,8 +19,5 @@ balances:
 addtx:
 	curl -s -X POST 127.0.0.1:8080/tx/add -H 'Content-Type: application/json' -d '{"from": "andrej", "to": "kyle", "value": 1, "data": ""}' | jq
 
-migrate:
-	go run ./cmd/migrate $(datadir)
-
 cleandb:
 	rm -rf data/

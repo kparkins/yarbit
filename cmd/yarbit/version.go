@@ -6,7 +6,7 @@ import (
 )
 
 const FixVersion = "0"
-const MinorVersion = "1"
+const MinorVersion = "2"
 const MajorVersion = "0"
 const Description = "The Yarbit Ledger"
 

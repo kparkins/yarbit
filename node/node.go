@@ -2,7 +2,6 @@ package node
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/kparkins/yarbit/database"
 	"io/ioutil"
 	"net/http"
@@ -49,13 +48,12 @@ func balanceListHandler(w http.ResponseWriter, r *http.Request, state *database.
 }
 
 func txAddHandler(w http.ResponseWriter, r *http.Request, state *database.State) {
-	fmt.Println("In tx add handle")
 	content, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		writeErrorResponse(w, err, http.StatusInternalServerError)
 		return
 	}
-	var txRequest TxAddRequest
+	txRequest := TxAddRequest{}
 	if err := json.Unmarshal(content, &txRequest); err != nil {
 		writeErrorResponse(w, err, http.StatusBadRequest)
 		return

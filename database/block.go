@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 )
 
-type Hash [32]byte
-
 type BlockFs struct {
 	Key   Hash  `json:"hash"`
 	Value Block `json:"block"`

@@ -8,8 +8,12 @@ import (
 )
 
 func main() {
-	cwd, _ := os.Getwd()
-	state, err := database.NewStateFromDisk(cwd)
+	if len(os.Args) < 2 {
+		fmt.Fprintln(os.Stderr, "Must supply directory as first argument to the migrate command.")
+		os.Exit(1)
+	}
+	dataDir := os.Args[1]
+	state, err := database.NewStateFromDisk(dataDir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error loading state from disk.")
 		os.Exit(1)

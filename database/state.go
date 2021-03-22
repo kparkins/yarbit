@@ -138,6 +138,10 @@ func (s *State) LatestBlockHash() Hash {
 	return s.lastBlockHash
 }
 
+func (s *State) LatestBlock() Block {
+	return s.lastBlock
+}
+
 func (s *State) LatestBlockNumber() uint64 {
 	return s.lastBlock.Header.Number
 }

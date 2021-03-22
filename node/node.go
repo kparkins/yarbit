@@ -1,117 +1,70 @@
 package node
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/kparkins/yarbit/database"
-	"io/ioutil"
 	"net/http"
 )
 
-const Port = 80
-
-type ErrorResponse struct {
-	Error string `json:"error"`
+type PeerNode struct {
+	Ip          string `json:"ip"`
+	Port        uint64 `json:"port"`
+	IsBootstrap bool   `json:"is_bootstrap"`
+	IsActive    bool   `json:"is_active"`
 }
 
-type BalancesListResponse struct {
-	Hash     database.Hash             `json:"block_hash"`
-	Balances map[database.Account]uint `json:"balances"`
+type Node struct {
+	dataDir string
+	port    uint64
+
+	state      *database.State
+	knownPeers []PeerNode
 }
 
-type TxAddRequest struct {
-	From  string `json:"from"`
-	To    string `json:"to"`
-	Value uint   `json:"value"`
-	Data  string `json:"data"`
+func New(dataDir string, port uint64, bootstrap PeerNode) *Node {
+	node := &Node{
+		dataDir:    dataDir,
+		port:       port,
+		knownPeers: make([]PeerNode, 0),
+	}
+	if bootstrap.Ip != "" {
+		node.knownPeers = append(node.knownPeers, bootstrap)
+	}
+	return node
 }
 
-type TxAddResponse struct {
-	Hash database.Hash `json:"block_hash"`
-}
-
-type NodeStatusResponse struct {
-	Hash   database.Hash `json:"block_hash"`
-	Number uint64        `json:"block_number"`
-}
-
-func Run(dataDir string) error {
-	state, err := database.NewStateFromDisk(dataDir)
+func (n *Node) Run() error {
+	fmt.Print("Loading state from disk...")
+	var err error
+	n.state, err = database.NewStateFromDisk(n.dataDir)
 	if err != nil {
+		fmt.Print("Failed.\n")
 		return err
 	}
-	defer state.Close()
+	fmt.Print("Complete.\n")
+	defer n.state.Close()
 
 	http.HandleFunc("/balances/list", func(writer http.ResponseWriter, request *http.Request) {
-		balanceListHandler(writer, request, state)
+		balanceListHandler(writer, request, n.state)
 	})
 	http.HandleFunc("/tx/add", func(writer http.ResponseWriter, request *http.Request) {
-		txAddHandler(writer, request, state)
+		txAddHandler(writer, request, n.state)
 	})
 	http.HandleFunc("/node/status", func(writer http.ResponseWriter, request *http.Request) {
-		nodeStatusHandler(writer, request, state)
+		nodeStatusHandler(writer, request, n)
 	})
-	return http.ListenAndServe(fmt.Sprintf(":%d", Port), nil)
+	fmt.Printf("Listening on port: %d\n", n.port)
+	return http.ListenAndServe(fmt.Sprintf(":%d", n.port), nil)
 }
 
-func balanceListHandler(w http.ResponseWriter, r *http.Request, state *database.State) {
-	writeResponse(w, BalancesListResponse{Hash: state.LatestBlockHash(), Balances: state.Balances})
+func (n *Node) LatestBlockHash() database.Hash {
+	return n.state.LatestBlockHash()
 }
 
-func txAddHandler(w http.ResponseWriter, r *http.Request, state *database.State) {
-	content, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		writeErrorResponse(w, err, http.StatusInternalServerError)
-		return
-	}
-	defer r.Body.Close()
-	txRequest := TxAddRequest{}
-	if err := json.Unmarshal(content, &txRequest); err != nil {
-		writeErrorResponse(w, err, http.StatusBadRequest)
-		return
-	}
-	tx := database.NewTx(
-		database.NewAccount(txRequest.From),
-		database.NewAccount(txRequest.To),
-		txRequest.Value,
-		txRequest.Data,
-	)
-	if err := state.AddTx(tx); err != nil {
-		writeErrorResponse(w, err, http.StatusInternalServerError)
-		return
-	}
-	hash, err := state.Persist()
-	if err != nil {
-		writeErrorResponse(w, err, http.StatusInternalServerError)
-		return
-	}
-	writeResponse(w, TxAddResponse{Hash: hash})
+func (n *Node) LatestBlockNumber() uint64 {
+	return n.state.LatestBlockNumber()
 }
 
-func nodeStatusHandler(w http.ResponseWriter, r *http.Request, state *database.State) {
-	response := NodeStatusResponse{
-		Hash: state.LatestBlockHash(),
-		Number: state.LatestBlockNumber(),
-	}
-	writeResponse(w, response)
-}
-
-func writeResponse(w http.ResponseWriter, content interface{}) {
-	contentJson, err := json.Marshal(content)
-	if err != nil {
-		writeErrorResponse(w, err, http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(contentJson)
-}
-
-func writeErrorResponse(w http.ResponseWriter, e error, statusCode int) {
-	w.WriteHeader(statusCode)
-	if e != nil {
-		contentJson, _ := json.Marshal(ErrorResponse{Error: e.Error()})
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(contentJson)
-	}
+func (n *Node) KnownPeers() []PeerNode {
+	return n.knownPeers
 }

@@ -75,3 +75,6 @@ func nodeStatusHandler(w http.ResponseWriter, r *http.Request, node *Node) {
 	}
 	writeResponse(w, response)
 }
+
+func nodePeersHandler(w http.ResponseWriter, r *http.Request) {
+}

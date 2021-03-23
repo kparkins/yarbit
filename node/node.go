@@ -53,6 +53,9 @@ func (n *Node) Run() error {
 	http.HandleFunc("/node/status", func(writer http.ResponseWriter, request *http.Request) {
 		nodeStatusHandler(writer, request, n)
 	})
+    http.HandleFunc("/node/peers", func(writer http.ResponseWriter, request *http.Request) {
+        nodePeersHandler(writer, request)
+    })
 	fmt.Printf("Listening on port: %d\n", n.port)
 	return http.ListenAndServe(fmt.Sprintf(":%d", n.port), nil)
 }

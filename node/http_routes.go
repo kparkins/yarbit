@@ -28,9 +28,9 @@ type TxAddResponse struct {
 }
 
 type NodeStatusResponse struct {
-	Hash       database.Hash `json:"block_hash"`
-	Number     uint64        `json:"block_number"`
-	KnownPeers []PeerNode    `json:"known_peers"`
+	Hash       database.Hash       `json:"block_hash"`
+	Number     uint64              `json:"block_number"`
+	KnownPeers map[string]PeerNode `json:"known_peers"`
 }
 
 func handleListBalances(w http.ResponseWriter, r *http.Request, state *database.State) {
@@ -69,12 +69,17 @@ func handleAddTx(w http.ResponseWriter, r *http.Request, state *database.State) 
 
 func handleNodeStatus(w http.ResponseWriter, r *http.Request, node *Node) {
 	response := NodeStatusResponse{
-		Hash:   node.LatestBlockHash(),
-		Number: node.LatestBlockNumber(),
+		Hash:       node.LatestBlockHash(),
+		Number:     node.LatestBlockNumber(),
 		KnownPeers: node.KnownPeers(),
 	}
 	writeResponse(w, response)
 }
 
-func handleNodePeers(w http.ResponseWriter, r *http.Request) {
+func handleNodeSync(w http.ResponseWriter, r *http.Request) {
+
+}
+
+func handleAddPeer(w http.ResponseWriter, r *http.Request) {
+
 }

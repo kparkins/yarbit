@@ -13,22 +13,26 @@ type PeerNode struct {
 	IsActive    bool   `json:"is_active"`
 }
 
+func (p PeerNode) SocketAddress() string {
+	return fmt.Sprintf("%s:%d", p.Ip, p.Port)
+}
+
 type Node struct {
 	dataDir string
 	port    uint64
 
 	state      *database.State
-	knownPeers []PeerNode
+	knownPeers map[string]PeerNode
 }
 
 func New(dataDir string, port uint64, bootstrap PeerNode) *Node {
 	node := &Node{
 		dataDir:    dataDir,
 		port:       port,
-		knownPeers: make([]PeerNode, 0),
+		knownPeers: make(map[string]PeerNode, 0),
 	}
 	if bootstrap.Ip != "" {
-		node.knownPeers = append(node.knownPeers, bootstrap)
+		node.knownPeers[bootstrap.SocketAddress()] = bootstrap
 	}
 	return node
 }
@@ -53,9 +57,13 @@ func (n *Node) Run() error {
 	http.HandleFunc("/node/status", func(writer http.ResponseWriter, request *http.Request) {
 		handleNodeStatus(writer, request, n)
 	})
-    http.HandleFunc("/node/peers", func(writer http.ResponseWriter, request *http.Request) {
-        handleNodePeers(writer, request)
-    })
+	http.HandleFunc("/node/sync", func(writer http.ResponseWriter, request *http.Request) {
+		handleNodeSync(writer, request)
+	})
+	http.HandleFunc("/node/peer", func(writer http.ResponseWriter, request *http.Request) {
+		handleAddPeer(writer, request)
+	})
+
 	fmt.Printf("Listening on port: %d\n", n.port)
 	return http.ListenAndServe(fmt.Sprintf(":%d", n.port), nil)
 }
@@ -68,6 +76,6 @@ func (n *Node) LatestBlockNumber() uint64 {
 	return n.state.LatestBlockNumber()
 }
 
-func (n *Node) KnownPeers() []PeerNode {
+func (n *Node) KnownPeers() map[string]PeerNode {
 	return n.knownPeers
 }

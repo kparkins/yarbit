@@ -33,11 +33,11 @@ type NodeStatusResponse struct {
 	KnownPeers []PeerNode    `json:"known_peers"`
 }
 
-func balanceListHandler(w http.ResponseWriter, r *http.Request, state *database.State) {
+func handleListBalances(w http.ResponseWriter, r *http.Request, state *database.State) {
 	writeResponse(w, BalancesListResponse{Hash: state.LatestBlockHash(), Balances: state.Balances})
 }
 
-func txAddHandler(w http.ResponseWriter, r *http.Request, state *database.State) {
+func handleAddTx(w http.ResponseWriter, r *http.Request, state *database.State) {
 	content, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		writeErrorResponse(w, err, http.StatusInternalServerError)
@@ -67,7 +67,7 @@ func txAddHandler(w http.ResponseWriter, r *http.Request, state *database.State)
 	writeResponse(w, TxAddResponse{Hash: hash})
 }
 
-func nodeStatusHandler(w http.ResponseWriter, r *http.Request, node *Node) {
+func handleNodeStatus(w http.ResponseWriter, r *http.Request, node *Node) {
 	response := NodeStatusResponse{
 		Hash:   node.LatestBlockHash(),
 		Number: node.LatestBlockNumber(),
@@ -76,5 +76,5 @@ func nodeStatusHandler(w http.ResponseWriter, r *http.Request, node *Node) {
 	writeResponse(w, response)
 }
 
-func nodePeersHandler(w http.ResponseWriter, r *http.Request) {
+func handleNodePeers(w http.ResponseWriter, r *http.Request) {
 }

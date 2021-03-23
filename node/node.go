@@ -45,16 +45,16 @@ func (n *Node) Run() error {
 	defer n.state.Close()
 
 	http.HandleFunc("/balances/list", func(writer http.ResponseWriter, request *http.Request) {
-		balanceListHandler(writer, request, n.state)
+		handleListBalances(writer, request, n.state)
 	})
 	http.HandleFunc("/tx/add", func(writer http.ResponseWriter, request *http.Request) {
-		txAddHandler(writer, request, n.state)
+		handleAddTx(writer, request, n.state)
 	})
 	http.HandleFunc("/node/status", func(writer http.ResponseWriter, request *http.Request) {
-		nodeStatusHandler(writer, request, n)
+		handleNodeStatus(writer, request, n)
 	})
     http.HandleFunc("/node/peers", func(writer http.ResponseWriter, request *http.Request) {
-        nodePeersHandler(writer, request)
+        handleNodePeers(writer, request)
     })
 	fmt.Printf("Listening on port: %d\n", n.port)
 	return http.ListenAndServe(fmt.Sprintf(":%d", n.port), nil)

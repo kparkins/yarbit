@@ -13,6 +13,9 @@ debug:
 run: build
 	./yarbit run --datadir=data
 
+status:
+	curl -s 127.0.0.1:8080/node/status
+
 balances:
 	curl -s 127.0.0.1:8080/balances/list | jq
 

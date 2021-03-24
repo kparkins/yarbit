@@ -11,7 +11,7 @@ import (
 const AfterNone = ""
 
 type BlockStore interface {
-	Write(block *Block) (Hash, error)
+	Write(blocks ...*Block) (Hash, error)
 	Read(after string, limit uint64) ([]Block, error)
 	Stream(after string, blockStream chan<- Block)
 }
@@ -28,29 +28,32 @@ func NewFileBlockStore(file string) *FileBlockStore {
 	}
 }
 
-func (f *FileBlockStore) Write(block *Block) (Hash, error) {
+func (f *FileBlockStore) Write(blocks ...*Block) (Hash, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
-	hash, err := block.Hash()
-	if err != nil {
-		return hash, err
-	}
-	blockFile := BlockFs{
-		Key:   hash,
-		Value: *block,
-	}
-	blockFileJson, err := json.Marshal(blockFile)
-	if err != nil {
-		return hash, err
-	}
 	file, err := os.Open(f.file)
 	if err != nil {
-		return hash, err
+		return Hash{}, err
 	}
-	fmt.Printf("Persisting new block to disk: \n")
-	fmt.Printf("\t%x\n", hash)
-	if _, err := file.Write(append(blockFileJson, '\n')); err != nil {
-		return hash, err
+	var hash Hash
+	for _, block := range blocks {
+		hash, err = block.Hash()
+		if err != nil {
+			return hash, err
+		}
+		blockFile := BlockFs{
+			Key:   hash,
+			Value: *block,
+		}
+		blockFileJson, err := json.Marshal(blockFile)
+		if err != nil {
+			return hash, err
+		}
+		fmt.Printf("Persisting new block to disk: \n")
+		fmt.Printf("\t%x\n", hash)
+		if _, err := file.Write(append(blockFileJson, '\n')); err != nil {
+			return hash, err
+		}
 	}
 	return hash, nil
 }
@@ -86,7 +89,7 @@ func (f *FileBlockStore) Read(after string, limit uint64) ([]Block, error) {
 	}
 	var blockFileObject BlockFs
 	scanner := bufio.NewScanner(file)
-	for after != "" && scanner.Scan() {
+	for after != AfterNone && scanner.Scan() {
 		if err = scanner.Err(); err != nil {
 			return nil, err
 		}

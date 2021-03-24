@@ -14,12 +14,11 @@ func migrateCommand() *cobra.Command {
 		Short: "Run the database migration",
 		Run: func(cmd *cobra.Command, args []string) {
 			dataDir, _ := cmd.Flags().GetString(flagDataDir)
-			state, err := database.NewStateFromDisk(dataDir)
-			if err != nil {
+			state := database.NewStateFromDisk(dataDir)
+			if err := state.Load(); err != nil {
 				fmt.Fprintln(os.Stderr, "Error loading state from disk.")
 				os.Exit(1)
 			}
-			defer state.Close()
 			block0 := database.NewBlock(
 				database.Hash{},
 				0,

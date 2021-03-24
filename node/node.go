@@ -1,12 +1,10 @@
 package node
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/kparkins/yarbit/database"
 	"github.com/pkg/errors"
-	"io/ioutil"
 	"net/http"
 )
 
@@ -26,29 +24,27 @@ func New(dataDir string, port uint64, bootstrap PeerNode) *Node {
 		router:     mux.NewRouter(),
 		knownPeers: make(map[string]PeerNode, 0),
 	}
-	if bootstrap.Ip != "" {
+	if bootstrap.IpAddress != "" {
 		node.knownPeers[bootstrap.SocketAddress()] = bootstrap
 	}
 	return node
 }
 
 func (n *Node) routes() {
-	n.router.HandleFunc("/tx/add", n.handleAddTx())
-	n.router.HandleFunc("/node/peer", n.handleAddPeer())
-	n.router.HandleFunc("/node/sync", n.handleNodeSync())
-	n.router.HandleFunc("/node/status", n.handleNodeStatus())
-	n.router.HandleFunc("/balances/list", n.handleListBalances())
+	n.router.HandleFunc("/tx/add", n.handleAddTx()).Methods("POST")
+	n.router.HandleFunc("/node/peer", n.handleAddPeer()).Methods("POST")
+	n.router.HandleFunc("/node/sync", n.handleNodeSync()).Methods("GET")
+	n.router.HandleFunc("/node/status", n.handleNodeStatus()).Methods("GET")
+	n.router.HandleFunc("/balances/list", n.handleListBalances()).Methods("GET")
 }
 
 func (n *Node) Run() error {
-	var err error
 	fmt.Print("Loading state from disk...")
-	n.state, err = database.NewStateFromDisk(n.config.DataDir)
-	if err != nil {
+	n.state = database.NewStateFromDisk(n.config.DataDir)
+	if err := n.state.Load(); err != nil {
 		return errors.Wrap(err, "Failed to load state from disk.")
 	}
 	fmt.Print("Complete.\n")
-	defer n.state.Close()
 	n.routes()
 	fmt.Printf("Listening on port: %d\n", n.config.Port)
 	return http.ListenAndServe(fmt.Sprintf(":%d", n.config.Port), nil)
@@ -78,17 +74,13 @@ func (n *Node) handleAddTx() http.HandlerFunc {
 		Hash database.Hash `json:"block_hash"`
 	}
 	return func(writer http.ResponseWriter, request *http.Request) {
-		content, err := ioutil.ReadAll(request.Body)
+		var txRequest TxAddRequest
+		err := readRequestJson(request, &txRequest)
 		if err != nil {
-			writeErrorResponse(writer, err, http.StatusInternalServerError)
-			return
-		}
-		defer request.Body.Close()
-		txRequest := TxAddRequest{}
-		if err := json.Unmarshal(content, &txRequest); err != nil {
 			writeErrorResponse(writer, err, http.StatusBadRequest)
 			return
 		}
+		defer request.Body.Close()
 		tx := database.NewTx(
 			database.NewAccount(txRequest.From),
 			database.NewAccount(txRequest.To),
@@ -125,12 +117,29 @@ func (n *Node) handleNodeStatus() http.HandlerFunc {
 
 func (n *Node) handleNodeSync() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-
+		after := request.URL.Query().Get("after")
+		fmt.Println(after)
 	}
 }
 
 func (n *Node) handleAddPeer() http.HandlerFunc {
+	type AddPeerResponse struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}
 	return func(writer http.ResponseWriter, request *http.Request) {
-
+		var peer PeerNode
+		if err := readRequestJson(request, &peer); err != nil {
+			writeErrorResponse(writer, err, http.StatusBadRequest)
+			return
+		}
+		peer.IsActive = true
+		if _, ok := n.knownPeers[peer.SocketAddress()]; !ok {
+			n.knownPeers[peer.SocketAddress()] = peer
+		}
+		writeResponse(writer, AddPeerResponse{
+			Success: true,
+			Message: fmt.Sprintf("Added %s to known peers", peer.SocketAddress()),
+		})
 	}
 }

@@ -13,7 +13,7 @@ const flagBootstrap = "bootstrap"
 
 func runCommand() *cobra.Command {
 	command := &cobra.Command{
-		Use: "run",
+		Use:   "run",
 		Short: "Launches the Yarbit node and its HTTP API.",
 		Run: func(cmd *cobra.Command, args []string) {
 			dataDir, err := cmd.Flags().GetString(flagDataDir)
@@ -24,10 +24,10 @@ func runCommand() *cobra.Command {
 			}
 			ip, port := getBoostrapIpAndPort(bootstrapNode)
 			bootstrap := node.PeerNode{
-				Ip: ip,
-				Port: port,
+				IpAddress:   ip,
+				Port:        port,
 				IsBootstrap: true,
-				IsActive: true,
+				IsActive:    true,
 			}
 			server := node.New(dataDir, 80, bootstrap)
 			err = server.Run()

@@ -1,59 +1,59 @@
 package database
 
 import (
-	"bufio"
-	"encoding/json"
 	"fmt"
-	"os"
 	"reflect"
+	"sync"
 	"time"
 )
 
+const MaxBlocksPerRead = 100
+
 type State struct {
 	Balances      map[Account]uint
+	dataDir       string
 	txMempool     []Tx
-	blockDb       *os.File
+	blockStore    BlockStore
 	lastBlockHash Hash
 	lastBlock     Block
 }
 
-func NewStateFromDisk(dataDir string) (*State, error) {
-	if err := initDataDir(dataDir); err != nil {
-		return nil, err
-	}
-	genesis, err := LoadGenesis(getGenesisFilePath(dataDir))
-	if err != nil {
-		return nil, err
-	}
+func NewStateFromDisk(dataDir string) *State {
 	blockDbPath := getBlockDatabaseFilePath(dataDir)
-	blockDb, err := os.OpenFile(blockDbPath, os.O_APPEND|os.O_RDWR, os.ModePerm)
-	if err != nil {
-		return nil, err
-	}
 	state := &State{
-		Balances:      genesis.Balances,
+		dataDir:       dataDir,
+		Balances:      make(map[Account]uint, 0),
 		txMempool:     make([]Tx, 0),
-		blockDb:       blockDb,
+		blockStore:    NewFileBlockStore(blockDbPath),
 		lastBlockHash: Hash{},
-		lastBlock: NewBlock(Hash{}, 0, 0, make([]Tx, 0)),
+		lastBlock:     NewBlock(Hash{}, 0, 0, make([]Tx, 0)),
 	}
+	return state
+}
 
-	scanner := bufio.NewScanner(blockDb)
-	for scanner.Scan() {
-		if err = scanner.Err(); err != nil {
-			return nil, err
-		}
-		var blockFileObject BlockFs
-		if err = json.Unmarshal(scanner.Bytes(), &blockFileObject); err != nil {
-			return nil, err
-		}
-		if err = state.applyBlocK(blockFileObject.Value); err != nil {
-			return nil, err
-		}
-		state.lastBlockHash = blockFileObject.Key
-		state.lastBlock = blockFileObject.Value
+func (s *State) Load() error {
+	if err := initDataDir(s.dataDir); err != nil {
+		return err
 	}
-	return state, nil
+	genesis, err := LoadGenesis(getGenesisFilePath(s.dataDir))
+	if err != nil {
+		return err
+	}
+	s.Balances = genesis.Balances
+	if err := s.blockStore.Open(); err != nil {
+		return err
+	}
+	group := sync.WaitGroup{}
+	blocks := make(chan Block, 100)
+	s.blockStore.Stream(AfterNone, blocks, &group)
+	for b := range blocks {
+		s.AddBlock(b)
+	}
+	return nil
+}
+
+func (s *State) GetBlocksAfter(key string) ([]Block, error) {
+	return s.blockStore.Read(key, MaxBlocksPerRead)
 }
 
 func (s *State) AddTx(tx Tx) error {
@@ -85,31 +85,11 @@ func (s *State) Persist() (Hash, error) {
 	if !reflect.DeepEqual(Hash{}, s.lastBlockHash) {
 		block.Header.Number++
 	}
-	hash, err := block.Hash()
-	if err != nil {
-		return Hash{}, err
-	}
-	blockFile := BlockFs{
-		Key:   hash,
-		Value: block,
-	}
-	blockFileJson, err := json.Marshal(blockFile)
-	if err != nil {
-		return Hash{}, err
-	}
-	fmt.Printf("Persisting new block to disk: \n")
-	fmt.Printf("\t%x\n", hash)
-	if _, err := s.blockDb.Write(append(blockFileJson, '\n')); err != nil {
-		return Hash{}, err
-	}
-	s.lastBlockHash = hash
+
+	//s.lastBlockHash = hash
 	s.lastBlock = block
 	s.txMempool = make([]Tx, 0)
 	return s.lastBlockHash, nil
-}
-
-func (s *State) Close() error {
-	return s.blockDb.Close()
 }
 
 func (s *State) applyTx(tx Tx) error {
@@ -125,7 +105,7 @@ func (s *State) applyTx(tx Tx) error {
 	return nil
 }
 
-func (s *State) applyBlocK(block Block) error {
+func (s *State) applyBlock(block Block) error {
 	for _, tx := range block.Txs {
 		if err := s.applyTx(tx); err != nil {
 			return err

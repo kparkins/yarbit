@@ -34,12 +34,11 @@ func txAddCommand() *cobra.Command {
 			to, _ := cmd.Flags().GetString(flagTo)
 			value, _:= cmd.Flags().GetUint(flagValue)
 			data, _ := cmd.Flags().GetString(flagData)
-			state, err := database.NewStateFromDisk(dataDir)
-			if err != nil {
+			state := database.NewStateFromDisk(dataDir)
+			if err := state.Load(); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
 			}
-			defer state.Close()
 			tx := database.NewTx(database.NewAccount(from), database.NewAccount(to), value, data)
 			if err := state.AddTx(tx); err != nil {
 				fmt.Fprintln(os.Stderr, err)

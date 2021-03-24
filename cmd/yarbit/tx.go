@@ -39,15 +39,16 @@ func txAddCommand() *cobra.Command {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
 			}
-			tx := database.NewTx(database.NewAccount(from), database.NewAccount(to), value, data)
-			if err := state.AddTx(tx); err != nil {
+			_ = database.NewTx(database.NewAccount(from), database.NewAccount(to), value, data)
+			//TODO
+			/*if err := state.AddTx(tx); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
 			}
 			if _, err := state.Persist(); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
-			}
+			}*/
 			fmt.Println("TX successfully persisted to the ledger.")
 		},
 	}

@@ -58,7 +58,7 @@ func (n *Node) handleListBalances() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		writeResponse(writer, BalancesListResponse{
 			Hash:     n.state.LatestBlockHash(),
-			Balances: n.state.Balances,
+			Balances: n.state.Balances(),
 		})
 	}
 }
@@ -81,22 +81,24 @@ func (n *Node) handleAddTx() http.HandlerFunc {
 			return
 		}
 		defer request.Body.Close()
-		tx := database.NewTx(
+		_ = database.NewTx(
 			database.NewAccount(txRequest.From),
 			database.NewAccount(txRequest.To),
 			txRequest.Value,
 			txRequest.Data,
 		)
+		//TODO
+		/*
 		if err := n.state.AddTx(tx); err != nil {
 			writeErrorResponse(writer, err, http.StatusInternalServerError)
 			return
 		}
-		hash, err := n.state.Persist()
+		hash, err := n.state.Persist()*/
 		if err != nil {
 			writeErrorResponse(writer, err, http.StatusInternalServerError)
 			return
 		}
-		writeResponse(writer, TxAddResponse{Hash: hash})
+		//writeResponse(writer, TxAddResponse{Hash: hash})
 	}
 }
 

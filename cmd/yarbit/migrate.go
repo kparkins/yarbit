@@ -30,7 +30,7 @@ func migrateCommand() *cobra.Command {
 			)
 
 			state.AddBlock(block0)
-			block0Hash, _ := state.Persist()
+			block0Hash, _ := block0.Hash()
 
 			block1 := database.NewBlock(
 				block0Hash,
@@ -47,7 +47,6 @@ func migrateCommand() *cobra.Command {
 			)
 
 			state.AddBlock(block1)
-			state.Persist()
 		},
 	}
 

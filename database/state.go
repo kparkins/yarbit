@@ -40,15 +40,17 @@ func (s *State) Load() error {
 		return err
 	}
 	s.Balances = genesis.Balances
-	if err := s.blockStore.Open(); err != nil {
-		return err
-	}
 	group := sync.WaitGroup{}
+	group.Add(1)
 	blocks := make(chan Block, 100)
-	s.blockStore.Stream(AfterNone, blocks, &group)
+	go func() {
+		s.blockStore.Stream(AfterNone, blocks)
+		group.Done()
+	}()
 	for b := range blocks {
 		s.AddBlock(b)
 	}
+	group.Wait()
 	return nil
 }
 

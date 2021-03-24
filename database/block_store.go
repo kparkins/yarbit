@@ -89,7 +89,7 @@ func (f *FileBlockStore) Read(after string, limit uint64) ([]Block, error) {
 	}
 	var blockFileObject BlockFs
 	scanner := bufio.NewScanner(file)
-	if err := f.advanceScanner(scanner, after); err != nil {
+	if err := f.seek(scanner, after); err != nil {
 		return nil, err
 	}
 	for i := uint64(0); i < limit && scanner.Scan(); i++ {
@@ -104,7 +104,7 @@ func (f *FileBlockStore) Read(after string, limit uint64) ([]Block, error) {
 	return blocks, nil
 }
 
-func (f *FileBlockStore) advanceScanner(scanner *bufio.Scanner, after string) error {
+func (f *FileBlockStore) seek(scanner *bufio.Scanner, after string) error {
 	if after == AfterNone {
 		return nil
 	}

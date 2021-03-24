@@ -85,21 +85,12 @@ func (f *FileBlockStore) Read(after string, limit uint64) ([]Block, error) {
 	var blocks []Block
 	file, err := os.OpenFile(f.file, os.O_APPEND|os.O_RDONLY, os.ModePerm)
 	if err != nil {
-		return blocks, nil
+		return nil, err
 	}
 	var blockFileObject BlockFs
 	scanner := bufio.NewScanner(file)
-	for after != AfterNone && scanner.Scan() {
-		if err = scanner.Err(); err != nil {
-			return nil, err
-		}
-		if err = json.Unmarshal(scanner.Bytes(), &blockFileObject); err != nil {
-			return nil, err
-		}
-		cursor := blockFileObject.Key.String()
-		if cursor == after {
-			break
-		}
+	if err := f.advanceScanner(scanner, after); err != nil {
+		return nil, err
 	}
 	for i := uint64(0); i < limit && scanner.Scan(); i++ {
 		if err = scanner.Err(); err != nil {
@@ -111,4 +102,21 @@ func (f *FileBlockStore) Read(after string, limit uint64) ([]Block, error) {
 		blocks = append(blocks, blockFileObject.Value)
 	}
 	return blocks, nil
+}
+
+func (f *FileBlockStore) advanceScanner(scanner *bufio.Scanner, after string) error {
+	if after == AfterNone {
+		return nil
+	}
+	var blockFileObject BlockFs
+	for after != blockFileObject.Key.String() && scanner.Scan() {
+		if err := scanner.Err(); err != nil {
+			return err
+		}
+		if err := json.Unmarshal(scanner.Bytes(), &blockFileObject); err != nil {
+			return err
+		}
+		after = blockFileObject.Key.String()
+	}
+	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/kparkins/yarbit/database"
 	"github.com/pkg/errors"
 	"net/http"
+	"time"
 )
 
 type Node struct {
@@ -81,24 +82,24 @@ func (n *Node) handleAddTx() http.HandlerFunc {
 			return
 		}
 		defer request.Body.Close()
-		_ = database.NewTx(
+		tx := database.NewTx(
 			database.NewAccount(txRequest.From),
 			database.NewAccount(txRequest.To),
 			txRequest.Value,
 			txRequest.Data,
 		)
-		//TODO
-		/*
-		if err := n.state.AddTx(tx); err != nil {
-			writeErrorResponse(writer, err, http.StatusInternalServerError)
-			return
-		}
-		hash, err := n.state.Persist()*/
+		block := database.NewBlock(
+			n.state.LatestBlockHash(),
+			n.state.LatestBlockNumber() + 1,
+			uint64(time.Now().Unix()),
+			[]database.Tx{tx},
+		)
+		hash, err := n.state.AddBlock(block)
 		if err != nil {
 			writeErrorResponse(writer, err, http.StatusInternalServerError)
 			return
 		}
-		//writeResponse(writer, TxAddResponse{Hash: hash})
+		writeResponse(writer, TxAddResponse{Hash: hash})
 	}
 }
 

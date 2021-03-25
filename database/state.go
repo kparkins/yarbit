@@ -82,20 +82,21 @@ func (s *State) nextBlockNumber() uint64 {
 	return s.lastBlock.Header.Number + 1
 }
 
-func (s *State) AddBlock(block *Block) error {
+func (s *State) AddBlock(block *Block) (Hash, error) {
+	var hash Hash
 	if block.Header.Number != s.nextBlockNumber() {
-		return fmt.Errorf("new block doesn't have the correct sequence number")
+		return hash, fmt.Errorf("new block doesn't have the correct sequence number")
 	}
 	if !reflect.DeepEqual(block.Header.Parent, s.lastBlockHash) {
-		return fmt.Errorf("new block doesn't have the correct parent hash")
+		return hash, fmt.Errorf("new block doesn't have the correct parent hash")
 	}
 	c := s.clone()
 	if err := applyBlock(c, block); err != nil {
-		return errors.Wrap(err, "failed to apply block")
+		return hash, errors.Wrap(err, "failed to apply block")
 	}
 	hash, err := s.blockStore.Write(block)
 	if err != nil {
-		return errors.Wrap(err, "could not persist new block to data store")
+		return hash, errors.Wrap(err, "could not persist new block to data store")
 	}
 	fmt.Printf("Saved new block to storage: \n")
 	fmt.Printf("\t%s\n", hash.String())
@@ -103,7 +104,7 @@ func (s *State) AddBlock(block *Block) error {
 	s.balances = c.balances
 	s.lastBlockHash = hash
 	s.lastBlock = block
-	return nil
+	return hash, nil
 }
 
 func (s *State) clone() *State {

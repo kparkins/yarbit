@@ -45,7 +45,6 @@ func (b *Block) Hash() (Hash, error) {
 	if err != nil {
 		return Hash{}, err
 	}
-	b.Clone()
 	return sha256.Sum256(encoded), nil
 }
 

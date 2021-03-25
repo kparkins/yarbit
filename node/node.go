@@ -47,7 +47,7 @@ func (n *Node) Run() error {
 	fmt.Print("Complete.\n")
 	n.routes()
 	fmt.Printf("Listening on port: %d\n", n.config.Port)
-	return http.ListenAndServe(fmt.Sprintf(":%d", n.config.Port), nil)
+	return http.ListenAndServe(fmt.Sprintf(":%d", n.config.Port), n.router)
 }
 
 func (n *Node) handleListBalances() http.HandlerFunc {

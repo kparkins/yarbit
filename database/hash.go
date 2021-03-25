@@ -16,3 +16,9 @@ func (h *Hash) UnmarshalText(data []byte) error {
 	_, err :=  hex.Decode(h[:], data)
 	return err
 }
+
+func (h *Hash) Clone() Hash {
+	var hash Hash
+	copy(hash[:], h[:])
+	return hash
+}

@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 )
 
-type BlockFs struct {
-	Key   Hash  `json:"hash"`
-	Value Block `json:"block"`
+type BlockFileEntry struct {
+	Hash  Hash   `json:"hash"`
+	Block *Block `json:"block"`
 }
 
 type BlockHeader struct {
@@ -16,13 +16,21 @@ type BlockHeader struct {
 	Time   uint64 `json:"time"`
 }
 
+func (h BlockHeader) Clone() BlockHeader {
+	return BlockHeader{
+		Parent: h.Parent.Clone(),
+		Number: h.Number,
+		Time:   h.Time,
+	}
+}
+
 type Block struct {
 	Header BlockHeader `json:"header"`
 	Txs    []Tx        `json:"payload"`
 }
 
-func NewBlock(parent Hash, number, time uint64, txs []Tx) Block {
-	return Block{
+func NewBlock(parent Hash, number, time uint64, txs []Tx) *Block {
+	return &Block{
 		Header: BlockHeader{
 			Parent: parent,
 			Number: number,
@@ -37,6 +45,15 @@ func (b *Block) Hash() (Hash, error) {
 	if err != nil {
 		return Hash{}, err
 	}
+	b.Clone()
 	return sha256.Sum256(encoded), nil
 }
 
+func (b *Block) Clone() *Block {
+	txs := make([]Tx, len(b.Txs))
+	copy(txs, b.Txs)
+	return &Block{
+		Header: b.Header.Clone(),
+		Txs:    txs,
+	}
+}

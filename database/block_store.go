@@ -3,7 +3,6 @@ package database
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"os"
 	"sync"
 )
@@ -17,21 +16,21 @@ type BlockStore interface {
 }
 
 type FileBlockStore struct {
-	lock   *sync.RWMutex
-	file   string
+	lock *sync.RWMutex
+	file string
 }
 
 func NewFileBlockStore(file string) *FileBlockStore {
 	return &FileBlockStore{
-		lock:   &sync.RWMutex{},
-		file:   file,
+		lock: &sync.RWMutex{},
+		file: file,
 	}
 }
 
 func (f *FileBlockStore) Write(blocks ...*Block) (Hash, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
-	file, err := os.Open(f.file)
+	file, err := os.OpenFile(f.file, os.O_APPEND | os.O_RDWR, os.ModePerm)
 	if err != nil {
 		return Hash{}, err
 	}
@@ -41,16 +40,14 @@ func (f *FileBlockStore) Write(blocks ...*Block) (Hash, error) {
 		if err != nil {
 			return hash, err
 		}
-		blockFile := BlockFs{
-			Key:   hash,
-			Value: *block,
+		blockFile := BlockFileEntry{
+			Hash:  hash,
+			Block: block,
 		}
 		blockFileJson, err := json.Marshal(blockFile)
 		if err != nil {
 			return hash, err
 		}
-		fmt.Printf("Persisting new block to disk: \n")
-		fmt.Printf("\t%x\n", hash)
 		if _, err := file.Write(append(blockFileJson, '\n')); err != nil {
 			return hash, err
 		}
@@ -83,23 +80,23 @@ func (f *FileBlockStore) Read(after string, limit uint64) ([]Block, error) {
 	defer f.lock.RUnlock()
 
 	var blocks []Block
-	file, err := os.OpenFile(f.file, os.O_APPEND|os.O_RDONLY, os.ModePerm)
+	file, err := os.OpenFile(f.file, os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		return nil, err
 	}
-	var blockFileObject BlockFs
 	scanner := bufio.NewScanner(file)
 	if err := f.seek(scanner, after); err != nil {
 		return nil, err
 	}
 	for i := uint64(0); i < limit && scanner.Scan(); i++ {
+		var blockEntry BlockFileEntry
 		if err = scanner.Err(); err != nil {
 			return nil, err
 		}
-		if err = json.Unmarshal(scanner.Bytes(), &blockFileObject); err != nil {
+		if err = json.Unmarshal(scanner.Bytes(), &blockEntry); err != nil {
 			return nil, err
 		}
-		blocks = append(blocks, blockFileObject.Value)
+		blocks = append(blocks, *blockEntry.Block)
 	}
 	return blocks, nil
 }
@@ -108,15 +105,15 @@ func (f *FileBlockStore) seek(scanner *bufio.Scanner, after string) error {
 	if after == AfterNone {
 		return nil
 	}
-	var blockFileObject BlockFs
-	for after != blockFileObject.Key.String() && scanner.Scan() {
+	var blockFileObject BlockFileEntry
+	for after != blockFileObject.Hash.String() && scanner.Scan() {
 		if err := scanner.Err(); err != nil {
 			return err
 		}
 		if err := json.Unmarshal(scanner.Bytes(), &blockFileObject); err != nil {
 			return err
 		}
-		after = blockFileObject.Key.String()
+		after = blockFileObject.Hash.String()
 	}
 	return nil
 }

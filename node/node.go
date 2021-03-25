@@ -129,7 +129,7 @@ func (n *Node) handleNodeSync() http.HandlerFunc {
 			writeErrorResponse(writer, err, http.StatusInternalServerError)
 			return
 		}
-		writeResponse(writer, blocks)
+		writeResponse(writer, SyncResult{Blocks: blocks})
 	}
 }
 

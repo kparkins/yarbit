@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-const AfterNone = ""
+const AfterGenesis = "0000000000000000000000000000000000000000000000000000000000000000"
 
 type BlockStore interface {
 	Write(blocks ...*Block) (Hash, error)
@@ -79,22 +79,22 @@ func (f *FileBlockStore) Read(after string, limit uint64) ([]Block, error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
-	var blocks []Block
+	blocks := make([]Block, 0)
 	file, err := os.OpenFile(f.file, os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		return nil, err
 	}
 	scanner := bufio.NewScanner(file)
 	if err := f.seek(scanner, after); err != nil {
-		return nil, err
+		return blocks, err
 	}
 	for i := uint64(0); i < limit && scanner.Scan(); i++ {
 		var blockEntry BlockFileEntry
 		if err = scanner.Err(); err != nil {
-			return nil, err
+			return blocks, err
 		}
 		if err = json.Unmarshal(scanner.Bytes(), &blockEntry); err != nil {
-			return nil, err
+			return blocks, err
 		}
 		blocks = append(blocks, *blockEntry.Block)
 	}
@@ -102,7 +102,7 @@ func (f *FileBlockStore) Read(after string, limit uint64) ([]Block, error) {
 }
 
 func (f *FileBlockStore) seek(scanner *bufio.Scanner, after string) error {
-	if after == AfterNone {
+	if after == AfterGenesis {
 		return nil
 	}
 	var blockFileObject BlockFileEntry

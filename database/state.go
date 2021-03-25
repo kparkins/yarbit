@@ -48,7 +48,7 @@ func (s *State) Load() error {
 		return errors.Wrap(err, "failed to load genesis file")
 	}
 	s.balances = genesis.Balances
-	blocks, err := s.blockStore.Read(AfterNone, math.MaxUint64)
+	blocks, err := s.blockStore.Read(AfterGenesis, math.MaxUint64)
 	if err != nil {
 		return errors.Wrap(err, "failed to load blocks from block store")
 	}

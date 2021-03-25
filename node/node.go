@@ -119,9 +119,17 @@ func (n *Node) handleNodeStatus() http.HandlerFunc {
 }
 
 func (n *Node) handleNodeSync() http.HandlerFunc {
+	type SyncResult struct {
+		Blocks []database.Block `json:"blocks"`
+	}
 	return func(writer http.ResponseWriter, request *http.Request) {
 		after := request.URL.Query().Get("after")
-		fmt.Println(after)
+		blocks, err := n.state.GetBlocksAfter(after)
+		if err != nil {
+			writeErrorResponse(writer, err, http.StatusInternalServerError)
+			return
+		}
+		writeResponse(writer, blocks)
 	}
 }
 

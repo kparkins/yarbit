@@ -106,14 +106,13 @@ func (f *FileBlockStore) seek(scanner *bufio.Scanner, after string) error {
 		return nil
 	}
 	var blockFileObject BlockFileEntry
-	for after != blockFileObject.Hash.String() && scanner.Scan() {
+	for after != blockFileObject.Hash.String() &&  scanner.Scan() {
 		if err := scanner.Err(); err != nil {
 			return err
 		}
 		if err := json.Unmarshal(scanner.Bytes(), &blockFileObject); err != nil {
 			return err
 		}
-		after = blockFileObject.Hash.String()
 	}
 	return nil
 }

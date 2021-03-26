@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-const AfterGenesis = "0000000000000000000000000000000000000000000000000000000000000000"
+const AfterGenesis = ""
 
 type BlockStore interface {
 	Write(blocks ...*Block) (Hash, error)

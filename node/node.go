@@ -14,17 +14,6 @@ import (
 	"time"
 )
 
-type StatusResponse struct {
-	Hash       database.Hash       `json:"block_hash"`
-	Number     uint64              `json:"block_number"`
-	KnownPeers map[string]PeerNode `json:"known_peers"`
-}
-
-type AddPeerResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
-}
-
 type Node struct {
 	config     Config
 	protocol   string
@@ -58,11 +47,11 @@ func New(dataDir string, ip string, port uint64, bootstrap PeerNode) *Node {
 }
 
 func (n *Node) routes() {
-	n.router.HandleFunc("/tx/add", n.handleAddTx()).Methods("POST")
-	n.router.HandleFunc("/node/peer", n.handleAddPeer()).Methods("POST")
-	n.router.HandleFunc("/node/sync", n.handleNodeSync()).Methods("GET")
-	n.router.HandleFunc("/node/status", n.handleNodeStatus()).Methods("GET")
-	n.router.HandleFunc("/balances/list", n.handleListBalances()).Methods("GET")
+	n.router.HandleFunc(ApiRouteAddTx, n.handleAddTx()).Methods("POST")
+	n.router.HandleFunc(ApiRouteAddPeer, n.handleAddPeer()).Methods("POST")
+	n.router.HandleFunc(ApiRouteSync, n.handleNodeSync()).Methods("GET")
+	n.router.HandleFunc(ApiRouteStatus, n.handleNodeStatus()).Methods("GET")
+	n.router.HandleFunc(ApiRouteListBalances, n.handleListBalances()).Methods("GET")
 }
 
 func (n *Node) Run() error {
@@ -151,11 +140,8 @@ func (n *Node) handleNodeStatus() http.HandlerFunc {
 }
 
 func (n *Node) handleNodeSync() http.HandlerFunc {
-	type SyncResult struct {
-		Blocks []database.Block `json:"blocks"`
-	}
 	return func(writer http.ResponseWriter, request *http.Request) {
-		after := request.URL.Query().Get("after")
+		after := request.URL.Query().Get(ApiQueryParamAfter)
 		blocks, err := n.GetBlocksAfter(after)
 		if err != nil {
 			writeErrorResponse(writer, err, http.StatusInternalServerError)
@@ -211,8 +197,11 @@ func (n *Node) AddPeer(peer PeerNode) {
 	if !peer.IsActive {
 		return
 	}
-	peer.IsActive = true
 	address := peer.SocketAddress()
+	nodeAddress := fmt.Sprintf("%s:%d", n.config.IpAddress, n.config.Port)
+	if _, ok := n.knownPeers[address]; ok || address == nodeAddress {
+		return
+	}
 	n.knownPeers[address] = peer
 	fmt.Printf("added new peer %s\n", address)
 }

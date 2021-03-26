@@ -31,21 +31,22 @@ func syncWithPeers(ctx context.Context, n *Node) {
 		Timeout: 5 * time.Second,
 	}
 	for _, peer := range knownPeers {
-		status, err := fetchPeerStatus(client, peer)
+		peerAddress := peer.SocketAddress()
+		status, err := fetchPeerStatus(client, peerAddress)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v while checking status of %s\n", err, peer.SocketAddress())
 			n.RemovePeer(peer)
 			continue
 		}
 		n.AddPeers(status.KnownPeers)
-		if err := joinPeers(client, peer, n.config.IpAddress, n.config.Port); err != nil {
+		if err := joinPeers(client, peerAddress, n.config.IpAddress, n.config.Port); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			continue
 		}
 		if status.Number <= n.LatestBlockNumber() {
 			continue
 		}
-		blocks, err := fetchBlocks(client, peer, n.LatestBlockHash())
+		blocks, err := fetchBlocks(client, peerAddress, n.LatestBlockHash())
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			continue
@@ -59,18 +60,10 @@ func syncWithPeers(ctx context.Context, n *Node) {
 
 }
 
-func fetchPeerStatus(client *http.Client, peer PeerNode) (StatusResponse, error) {
+func fetchPeerStatus(client *http.Client, address string) (StatusResponse, error) {
 	var status StatusResponse
-	address := peer.SocketAddress()
-	if !peer.IsActive {
-		return status, fmt.Errorf("%s not active", address)
-	}
 	url := fmt.Sprintf("%s://%s%s", "http", address, ApiRouteStatus)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return status, errors.Wrap(err, "while creating request")
-	}
-	response, err := client.Do(req)
+	response, err := client.Get(url)
 	if err != nil {
 		return status, errors.Wrap(err, fmt.Sprintf("error fetching peers from %s", address))
 	}
@@ -81,36 +74,24 @@ func fetchPeerStatus(client *http.Client, peer PeerNode) (StatusResponse, error)
 	return statusResponse, nil
 }
 
-func joinPeers(client *http.Client, peer PeerNode, ip string, port uint64) error {
-	address := peer.SocketAddress()
-	if !peer.IsActive {
-		return fmt.Errorf("%s not active", address)
-	}
+func joinPeers(client *http.Client, address, ip string, port uint64) error {
 	url := fmt.Sprintf("%s://%s%s", "http", address, ApiRouteAddPeer)
 	body, err := json.Marshal(PeerNode{IpAddress: ip, Port: port, IsActive: true})
 	if err != nil {
 		return fmt.Errorf("error marshaling add peer request body")
 	}
-	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
-	if err != nil {
-		return errors.Wrap(err, "while creating request")
-	}
-	req.Header.Set("Content-Type", "application/json")
-	response, err := client.Do(req)
+	response, err := client.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("error joining peers from %s", address))
 	}
-	response.Body.Close()
+	_ = response.Body.Close()
 	return nil
 }
 
-func fetchBlocks(client *http.Client, peer PeerNode, hash database.Hash) ([]database.Block, error){
+func fetchBlocks(client *http.Client, address string, hash database.Hash) ([]database.Block, error){
 	var result SyncResult
-	address := peer.SocketAddress()
-	if !peer.IsActive {
-		return result.Blocks, fmt.Errorf("%s not active", address)
-	}
 	url := fmt.Sprintf("%s://%s%s", "http", address, ApiRouteSync)
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return result.Blocks, errors.Wrap(err, "while creating request")
@@ -125,6 +106,7 @@ func fetchBlocks(client *http.Client, peer PeerNode, hash database.Hash) ([]data
 		return result.Blocks, errors.Wrap(err, fmt.Sprintf("error fetching blocks from %s", address))
 	}
 	defer response.Body.Close()
+
 	if err := readResponseJson(response, &result); err != nil {
 		return result.Blocks, errors.Wrap(err, "error reading blocks in response")
 	}

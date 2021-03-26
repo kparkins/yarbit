@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+const flagIp = "ip"
+const flagPort = "port"
 const flagBootstrap = "bootstrap"
 
 func runCommand() *cobra.Command {
@@ -16,21 +18,20 @@ func runCommand() *cobra.Command {
 		Use:   "run",
 		Short: "Launches the Yarbit node and its HTTP API.",
 		Run: func(cmd *cobra.Command, args []string) {
-			dataDir, err := cmd.Flags().GetString(flagDataDir)
-			bootstrapNode, err := cmd.Flags().GetString(flagBootstrap)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				os.Exit(1)
-			}
-			ip, port := getBoostrapIpAndPort(bootstrapNode)
+			dataDir, _ := cmd.Flags().GetString(flagDataDir)
+			bootstrapNode, _ := cmd.Flags().GetString(flagBootstrap)
+			ip, _ := cmd.Flags().GetString(flagIp)
+			port, _ := cmd.Flags().GetUint64(flagPort)
+
+			bootstrapIp, bootstrapPort := getBoostrapIpAndPort(bootstrapNode)
 			bootstrap := node.PeerNode{
-				IpAddress:   ip,
-				Port:        port,
+				IpAddress:   bootstrapIp,
+				Port:        bootstrapPort,
 				IsBootstrap: true,
 				IsActive:    true,
 			}
-			server := node.New(dataDir, 80, bootstrap)
-			err = server.Run()
+			server := node.New(dataDir, ip, port, bootstrap)
+			err := server.Run()
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
@@ -40,6 +41,8 @@ func runCommand() *cobra.Command {
 	}
 	command.Flags().String(flagBootstrap, "", "ip:port of the bootstrap node. If empty, defaults to being the bootstrap node.")
 	addDefaultRequiredFlags(command)
+	command.Flags().String(flagIp, "127.0.0.1", "the ip of the node")
+	command.Flags().Uint64(flagPort, uint64(80), "the port of the node")
 	return command
 }
 

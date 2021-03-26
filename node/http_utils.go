@@ -11,12 +11,24 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
+func readResponseJson(response *http.Response, result interface{}) error {
+	content, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return errors.Wrap(err, "invalid response body")
+	}
+	defer response.Body.Close()
+	if err := json.Unmarshal(content, result); err != nil {
+		return errors.Wrap(err, "failed to deserialize response body")
+	}
+	return nil
+}
+
 func readRequestJson(request *http.Request, result interface{}) error {
 	content, err := ioutil.ReadAll(request.Body)
 	if err != nil {
 		return errors.Wrap(err, "invalid request body")
 	}
-	if err := json.Unmarshal(content, &result); err != nil {
+	if err := json.Unmarshal(content, result); err != nil {
 		return errors.Wrap(err, "failed to deserialize request body")
 	}
 	return nil

@@ -13,6 +13,7 @@ type BlockFileEntry struct {
 type BlockHeader struct {
 	Parent Hash   `json:"parent"`
 	Number uint64 `json:"number"`
+	None   int32  `json:"nonce"`
 	Time   uint64 `json:"time"`
 }
 
@@ -55,4 +56,8 @@ func (b *Block) Clone() *Block {
 		Header: b.Header.Clone(),
 		Txs:    txs,
 	}
+}
+
+func IsBlockHashValid(hash Hash) bool {
+	return hash.String()[:6] == "000000"
 }

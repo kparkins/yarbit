@@ -5,6 +5,7 @@ import (
 	"github.com/kparkins/yarbit/database"
 	"github.com/spf13/cobra"
 	"os"
+	"time"
 )
 
 const flagTo = "to"
@@ -39,17 +40,19 @@ func txAddCommand() *cobra.Command {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
 			}
-			_ = database.NewTx(database.NewAccount(from), database.NewAccount(to), value, data)
-			//TODO
-			/*if err := state.AddTx(tx); err != nil {
+			tx := database.NewTx(database.NewAccount(from), database.NewAccount(to), value, data)
+			block := database.NewBlock(
+				state.LatestBlockHash(),
+				state.LatestBlockNumber()+1,
+				uint64(time.Now().Unix()),
+				[]database.Tx{tx},
+			)
+			hash, err := state.AddBlock(block)
+			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
 			}
-			if _, err := state.Persist(); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				os.Exit(1)
-			}*/
-			fmt.Println("TX successfully persisted to the ledger.")
+			fmt.Printf("TX successfully persisted to the ledger: %s", hash.String())
 		},
 	}
 	addDefaultRequiredFlags(command)

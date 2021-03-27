@@ -11,7 +11,7 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
-func readResponseJson(response *http.Response, result interface{}) error {
+func readJsonResponse(response *http.Response, result interface{}) error {
 	content, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		return errors.Wrap(err, "invalid response body")
@@ -23,7 +23,7 @@ func readResponseJson(response *http.Response, result interface{}) error {
 	return nil
 }
 
-func readRequestJson(request *http.Request, result interface{}) error {
+func readJsonRequest(request *http.Request, result interface{}) error {
 	content, err := ioutil.ReadAll(request.Body)
 	if err != nil {
 		return errors.Wrap(err, "invalid request body")
@@ -34,10 +34,10 @@ func readRequestJson(request *http.Request, result interface{}) error {
 	return nil
 }
 
-func writeResponse(w http.ResponseWriter, content interface{}) {
+func writeJsonResponse(w http.ResponseWriter, content interface{}) {
 	contentJson, err := json.Marshal(content)
 	if err != nil {
-		writeErrorResponse(w, err, http.StatusInternalServerError)
+		writeJsonErrorResponse(w, err, http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -45,7 +45,7 @@ func writeResponse(w http.ResponseWriter, content interface{}) {
 	w.Write(contentJson)
 }
 
-func writeErrorResponse(w http.ResponseWriter, e error, statusCode int) {
+func writeJsonErrorResponse(w http.ResponseWriter, e error, statusCode int) {
 	w.WriteHeader(statusCode)
 	if e != nil {
 		contentJson, _ := json.Marshal(ErrorResponse{Error: e.Error()})

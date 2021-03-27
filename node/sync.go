@@ -68,7 +68,7 @@ func fetchPeerStatus(client *http.Client, address string) (StatusResponse, error
 		return status, errors.Wrap(err, fmt.Sprintf("error fetching peers from %s", address))
 	}
 	statusResponse := StatusResponse{}
-	if err := readResponseJson(response, &statusResponse); err != nil {
+	if err := readJsonResponse(response, &statusResponse); err != nil {
 		return status, err
 	}
 	return statusResponse, nil
@@ -107,7 +107,7 @@ func fetchBlocks(client *http.Client, address string, hash database.Hash) ([]dat
 	}
 	defer response.Body.Close()
 
-	if err := readResponseJson(response, &result); err != nil {
+	if err := readJsonResponse(response, &result); err != nil {
 		return result.Blocks, errors.Wrap(err, "error reading blocks in response")
 	}
 	return result.Blocks, nil

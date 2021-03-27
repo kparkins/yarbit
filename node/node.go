@@ -83,7 +83,7 @@ func (n *Node) handleListBalances() http.HandlerFunc {
 		Balances map[database.Account]uint `json:"balances"`
 	}
 	return func(writer http.ResponseWriter, request *http.Request) {
-		writeResponse(writer, BalancesListResponse{
+		writeJsonResponse(writer, BalancesListResponse{
 			Hash:     n.LatestBlockHash(),
 			Balances: n.Balances(),
 		})
@@ -102,9 +102,9 @@ func (n *Node) handleAddTx() http.HandlerFunc {
 	}
 	return func(writer http.ResponseWriter, request *http.Request) {
 		var txRequest TxAddRequest
-		err := readRequestJson(request, &txRequest)
+		err := readJsonRequest(request, &txRequest)
 		if err != nil {
-			writeErrorResponse(writer, err, http.StatusBadRequest)
+			writeJsonErrorResponse(writer, err, http.StatusBadRequest)
 			return
 		}
 		defer request.Body.Close()
@@ -122,16 +122,16 @@ func (n *Node) handleAddTx() http.HandlerFunc {
 		)
 		hash, err := n.AddBlock(block)
 		if err != nil {
-			writeErrorResponse(writer, err, http.StatusInternalServerError)
+			writeJsonErrorResponse(writer, err, http.StatusInternalServerError)
 			return
 		}
-		writeResponse(writer, TxAddResponse{Hash: hash})
+		writeJsonResponse(writer, TxAddResponse{Hash: hash})
 	}
 }
 
 func (n *Node) handleNodeStatus() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		writeResponse(writer, StatusResponse{
+		writeJsonResponse(writer, StatusResponse{
 			Hash:       n.LatestBlockHash(),
 			Number:     n.LatestBlockNumber(),
 			KnownPeers: n.Peers(),
@@ -144,22 +144,22 @@ func (n *Node) handleNodeSync() http.HandlerFunc {
 		after := request.URL.Query().Get(ApiQueryParamAfter)
 		blocks, err := n.GetBlocksAfter(after)
 		if err != nil {
-			writeErrorResponse(writer, err, http.StatusInternalServerError)
+			writeJsonErrorResponse(writer, err, http.StatusInternalServerError)
 			return
 		}
-		writeResponse(writer, SyncResult{Blocks: blocks})
+		writeJsonResponse(writer, SyncResult{Blocks: blocks})
 	}
 }
 
 func (n *Node) handleAddPeer() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		var peer PeerNode
-		if err := readRequestJson(request, &peer); err != nil {
-			writeErrorResponse(writer, err, http.StatusBadRequest)
+		if err := readJsonRequest(request, &peer); err != nil {
+			writeJsonErrorResponse(writer, err, http.StatusBadRequest)
 			return
 		}
 		n.AddPeer(peer)
-		writeResponse(writer, AddPeerResponse{
+		writeJsonResponse(writer, AddPeerResponse{
 			Success: true,
 			Message: fmt.Sprintf("Added %s to known peers", peer.SocketAddress()),
 		})

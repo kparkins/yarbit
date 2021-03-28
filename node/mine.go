@@ -8,42 +8,43 @@ import (
 	"time"
 )
 
+func displayMiningProgress(block *database.Block) {
+	if block.Header.Nonce%1000000 == 0 {
+		fmt.Printf("mining attempt %d\n", block.Header.Nonce)
+	}
+}
+
 func mine(ctx context.Context, pending *database.Block, minedBlock chan *database.Block) {
 	if len(pending.Txs) <= 0 {
 		fmt.Fprintln(os.Stderr, "cannot mine an empty block")
 		return
 	}
-	attempt := 0
+	var err error
 	start := time.Now()
-	hash, err := pending.Hash()
-	fmt.Println(database.IsBlockHashValid(hash))
-	for !database.IsBlockHashValid(hash) {
+	hash := database.Hash{0xFF}
+	fmt.Printf("initial hash %s\n", hash.String())
+	for ; !database.IsBlockHashValid(hash); pending.Header.Nonce++ {
 		select {
 		case <-ctx.Done():
 			fmt.Println("mining cancelled")
 			return
 		default:
-			if attempt%100000 == 0 {
-				fmt.Printf("mining attempt %d\n", attempt)
-			}
+			displayMiningProgress(pending)
 			hash, err = pending.Hash()
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "error hashing new pending block")
 				return
 			}
-			attempt++
-			pending.Header.Nonce++
 		}
 	}
 
-	fmt.Printf("\nmined new Block '%x'\n", hash)
+	fmt.Printf("\n\tmined new Block '%s'\n", hash.String())
 	fmt.Printf("\theight: '%v'\n", pending.Header.Number)
 	fmt.Printf("\tnonce: '%v'\n", pending.Header.Nonce)
 	fmt.Printf("\tcreated: '%v'\n", pending.Header.Time)
 	fmt.Printf("\tminer: '%v'\n", pending.Header.Miner)
 	fmt.Printf("\tparent: '%s'\n\n", pending.Header.Parent.String())
 
-	fmt.Printf("\tAttempt: '%v'\n", attempt)
-	fmt.Printf("\tTime: %s\n\n", time.Since(start))
+	fmt.Printf("\ttime: %s\n\n", time.Since(start))
 	minedBlock <- pending
 }

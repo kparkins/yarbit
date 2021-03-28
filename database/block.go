@@ -1,6 +1,7 @@
 package database
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 )
@@ -62,6 +63,15 @@ func (b *Block) Clone() *Block {
 	}
 }
 
+var MiningDifficulty = 3
+var MiningDifficultyBytes []byte
+
+func init() {
+	for i := 0; i < MiningDifficulty; i++ {
+		MiningDifficultyBytes = append(MiningDifficultyBytes, 0)
+	}
+}
+
 func IsBlockHashValid(hash Hash) bool {
-	return hash.String()[:6] == "000000"
+	return bytes.Equal(hash[:MiningDifficulty], MiningDifficultyBytes)
 }

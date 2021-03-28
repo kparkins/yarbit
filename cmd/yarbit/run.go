@@ -30,7 +30,15 @@ func runCommand() *cobra.Command {
 				IsBootstrap: true,
 				IsActive:    true,
 			}
-			server := node.New(dataDir, ip, port, bootstrap)
+			config := node.Config{
+				DataDir:      dataDir,
+				IpAddress:    ip,
+				Port:         port,
+				Protocol:     "http",
+				Bootstrap:    bootstrap,
+				MinerAccount: "kyle",
+			}
+			server := node.New(config)
 			err := server.Run()
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)

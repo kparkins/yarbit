@@ -15,32 +15,29 @@ import (
 )
 
 type Node struct {
-	config     Config
-	protocol   string
-	lock       *sync.RWMutex
-	router     *mux.Router
-	state      *database.State
-	txPool     []database.Tx
-	knownPeers map[string]PeerNode
-	server     *http.Server
+	config        Config
+	lock          *sync.RWMutex
+	router        *mux.Router
+	state         *database.State
+	txPool        map[database.Hash]database.Tx
+	knownPeers    map[string]PeerNode
+	server        *http.Server
+	syncedBlocks  chan *database.Block
+	miningAccount database.Account
 }
 
-func New(dataDir string, ip string, port uint64, bootstrap PeerNode) *Node {
+func New(config Config) *Node {
 	node := &Node{
-		config: Config{
-			DataDir:   dataDir,
-			IpAddress: ip,
-			Port:      port,
-		},
-		protocol:   "http",
-		lock:       &sync.RWMutex{},
-		router:     mux.NewRouter(),
-		txPool:     make([]database.Tx, 0),
-		knownPeers: make(map[string]PeerNode, 0),
-		server:     &http.Server{},
+		config:       config,
+		lock:         &sync.RWMutex{},
+		router:       mux.NewRouter(),
+		txPool:       make(map[database.Hash]database.Tx, 0),
+		knownPeers:   make(map[string]PeerNode, 0),
+		server:       &http.Server{},
+		syncedBlocks: make(chan *database.Block, 100),
 	}
-	if bootstrap.IpAddress != "" {
-		node.knownPeers[bootstrap.SocketAddress()] = bootstrap
+	if config.Bootstrap.IpAddress != "" {
+		node.knownPeers[config.Bootstrap.SocketAddress()] = config.Bootstrap
 	}
 	node.routes()
 	node.server.Addr = fmt.Sprintf(":%d", node.config.Port)
@@ -99,7 +96,7 @@ func (n *Node) handleAddTx() http.HandlerFunc {
 		Data  string `json:"data"`
 	}
 	type TxAddResponse struct {
-		Hash database.Hash `json:"block_hash"`
+		Hash database.Hash `json:"tx_hash"`
 	}
 	return func(writer http.ResponseWriter, request *http.Request) {
 		var txRequest TxAddRequest
@@ -115,13 +112,7 @@ func (n *Node) handleAddTx() http.HandlerFunc {
 			txRequest.Value,
 			txRequest.Data,
 		)
-		block := database.NewBlock(
-			n.LatestBlockHash(),
-			n.LatestBlockNumber()+1,
-			uint64(time.Now().Unix()),
-			[]database.Tx{tx},
-		)
-		hash, err := n.AddBlock(block)
+		hash, err := n.AddPendingTx(tx)
 		if err != nil {
 			writeJsonErrorResponse(writer, err, http.StatusInternalServerError)
 			return
@@ -180,21 +171,63 @@ func (n *Node) sync(ctx context.Context) {
 	}
 }
 
+func (n *Node) createPendingBlock() *database.Block {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
+	txs := make([]database.Tx, len(n.txPool))
+	for _, tx := range n.txPool {
+		txs = append(txs, tx)
+	}
+	return &database.Block{
+		Header: database.BlockHeader{
+			Parent: n.state.LatestBlockHash(),
+			Number: n.state.LatestBlockNumber(),
+			Nonce:  0,
+			Time:   uint64(time.Now().Unix()),
+			Miner:  n.config.MinerAccount,
+		},
+		Txs: txs,
+	}
+}
 func (n *Node) mine(ctx context.Context) {
+	mining := false
+	ticker := time.NewTicker(10 * time.Second)
+	minedBlock := make(chan *database.Block, 1)
 	c, cancelMiner := context.WithCancel(ctx)
 	for {
 		select {
 		case <-ctx.Done():
 			cancelMiner()
 			return
-		default:
-			mine(c, nil)
+		case block := <-n.syncedBlocks:
+			fmt.Println(*block)
+			pendingBlock := n.createPendingBlock()
+			if len(pendingBlock.Txs) <= 0 {
+				mining = false
+				break
+			}
+			go mine(c, pendingBlock, minedBlock)
+		case block := <-minedBlock:
+			fmt.Println(block)
+			pendingBlock := n.createPendingBlock()
+			if len(pendingBlock.Txs) <= 0 {
+				mining = false
+				break
+			}
+			go mine(c, pendingBlock, minedBlock)
+		case block := <-ticker.C:
+			if !mining {
+				mining = true
+				fmt.Println(block)
+				pendingBlock := n.createPendingBlock()
+				if len(pendingBlock.Txs) <= 0 {
+					mining = false
+					break
+				}
+				go mine(c, pendingBlock, minedBlock)
+			}
 		}
 	}
-}
-
-func mine(ctx context.Context, pending *database.Block) {
-
 }
 
 func (n *Node) LatestBlockNumber() uint64 {
@@ -218,7 +251,7 @@ func (n *Node) LatestBlockHash() database.Hash {
 func (n *Node) Protocol() string {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
-	return n.protocol
+	return n.config.Protocol
 }
 
 func (n *Node) AddPeer(peer PeerNode) bool {
@@ -265,6 +298,17 @@ func (n *Node) AddBlock(block *database.Block) (database.Hash, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	return n.state.AddBlock(block)
+}
+
+func (n *Node) AddPendingTx(tx database.Tx) (database.Hash, error) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+	hash, err := tx.Hash()
+	if err != nil {
+		return database.Hash{}, err
+	}
+	n.txPool[hash] = tx
+	return hash, nil
 }
 
 func (n *Node) GetBlocksAfter(after string) ([]database.Block, error) {

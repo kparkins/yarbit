@@ -11,17 +11,20 @@ type BlockFileEntry struct {
 }
 
 type BlockHeader struct {
-	Parent Hash   `json:"parent"`
-	Number uint64 `json:"number"`
-	Nonce  int32  `json:"nonce"`
-	Time   uint64 `json:"time"`
+	Parent Hash    `json:"parent"`
+	Number uint64  `json:"number"`
+	Nonce  int32   `json:"nonce"`
+	Time   uint64  `json:"time"`
+	Miner  Account `json:"miner"`
 }
 
 func (h BlockHeader) Clone() BlockHeader {
 	return BlockHeader{
 		Parent: h.Parent.Clone(),
 		Number: h.Number,
+		Nonce:  h.Nonce,
 		Time:   h.Time,
+		Miner:  h.Miner,
 	}
 }
 
@@ -35,6 +38,7 @@ func NewBlock(parent Hash, number, time uint64, txs []Tx) *Block {
 		Header: BlockHeader{
 			Parent: parent,
 			Number: number,
+			Nonce:  0,
 			Time:   time,
 		},
 		Txs: txs,

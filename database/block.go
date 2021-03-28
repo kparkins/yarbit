@@ -13,7 +13,7 @@ type BlockFileEntry struct {
 type BlockHeader struct {
 	Parent Hash   `json:"parent"`
 	Number uint64 `json:"number"`
-	None   int32  `json:"nonce"`
+	Nonce  int32  `json:"nonce"`
 	Time   uint64 `json:"time"`
 }
 

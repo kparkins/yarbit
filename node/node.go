@@ -20,6 +20,7 @@ type Node struct {
 	lock       *sync.RWMutex
 	router     *mux.Router
 	state      *database.State
+	txPool     []database.Tx
 	knownPeers map[string]PeerNode
 	server     *http.Server
 }
@@ -34,6 +35,7 @@ func New(dataDir string, ip string, port uint64, bootstrap PeerNode) *Node {
 		protocol:   "http",
 		lock:       &sync.RWMutex{},
 		router:     mux.NewRouter(),
+		txPool:     make([]database.Tx, 0),
 		knownPeers: make(map[string]PeerNode, 0),
 		server:     &http.Server{},
 	}
@@ -65,14 +67,13 @@ func (n *Node) Run() error {
 	signal.Notify(quit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		<-quit
-		cancel()
-	}()
-	go func() {
 		fmt.Printf("Listening at: %s:%d\n", n.config.IpAddress, n.config.Port)
 		n.server.ListenAndServe()
 	}()
-	runSync(ctx, n)
+	go n.sync(ctx)
+	go n.mine(ctx)
+	<-quit
+	cancel()
 	n.server.Shutdown(ctx)
 	return nil
 }
@@ -161,9 +162,39 @@ func (n *Node) handleAddPeer() http.HandlerFunc {
 		n.AddPeer(peer)
 		writeJsonResponse(writer, AddPeerResponse{
 			Success: true,
-			Message: fmt.Sprintf("Added %s to known peers", peer.SocketAddress()),
+			Message: fmt.Sprintf("added %s to known peers", peer.SocketAddress()),
 		})
 	}
+}
+
+func (n *Node) sync(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			syncWithPeers(ctx, n)
+			break
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (n *Node) mine(ctx context.Context, ) {
+	c, cancelMiner := context.WithCancel(ctx)
+	for {
+		select {
+		case <-ctx.Done():
+			cancelMiner()
+			return
+		default:
+			mine(c, nil)
+		}
+	}
+}
+
+func mine(ctx context.Context, pending *database.Block) {
+
 }
 
 func (n *Node) LatestBlockNumber() uint64 {
@@ -172,12 +203,11 @@ func (n *Node) LatestBlockNumber() uint64 {
 	return n.state.LatestBlockNumber()
 }
 
-func (n *Node) Balances() map[database.Account] uint{
+func (n *Node) Balances() map[database.Account]uint {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 	return n.state.Balances()
 }
-
 
 func (n *Node) LatestBlockHash() database.Hash {
 	n.lock.RLock()
@@ -191,19 +221,20 @@ func (n *Node) Protocol() string {
 	return n.protocol
 }
 
-func (n *Node) AddPeer(peer PeerNode) {
+func (n *Node) AddPeer(peer PeerNode) bool {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if !peer.IsActive {
-		return
+		return false
 	}
 	address := peer.SocketAddress()
 	nodeAddress := fmt.Sprintf("%s:%d", n.config.IpAddress, n.config.Port)
 	if _, ok := n.knownPeers[address]; ok || address == nodeAddress {
-		return
+		return false
 	}
 	n.knownPeers[address] = peer
 	fmt.Printf("added new peer %s\n", address)
+	return true
 }
 
 func (n *Node) AddPeers(peers map[string]PeerNode) {

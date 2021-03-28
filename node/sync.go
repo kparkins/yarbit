@@ -12,24 +12,13 @@ import (
 	"time"
 )
 
-func runSync(ctx context.Context, n *Node) {
-	ticker := time.NewTicker(10 * time.Second)
-	for {
-		select {
-		case <-ticker.C:
-			syncWithPeers(ctx, n)
-			break
-		case <-ctx.Done():
-			return
-		}
-	}
-}
 
 func syncWithPeers(ctx context.Context, n *Node) {
 	knownPeers := n.Peers()
 	client := &http.Client{
 		Timeout: 5 * time.Second,
 	}
+	nodeAddress := fmt.Sprintf("%s:%d", n.config.IpAddress, n.config.Port)
 	for _, peer := range knownPeers {
 		peerAddress := peer.SocketAddress()
 		status, err := fetchPeerStatus(client, peerAddress)
@@ -38,6 +27,9 @@ func syncWithPeers(ctx context.Context, n *Node) {
 			n.RemovePeer(peer)
 			continue
 		}
+		status.KnownPeers = FilterPeers(status.KnownPeers, func(s string) bool {
+			return s != nodeAddress
+		})
 		n.AddPeers(status.KnownPeers)
 		if err := joinPeers(client, peerAddress, n.config.IpAddress, n.config.Port); err != nil {
 			fmt.Fprintln(os.Stderr, err)

@@ -1,7 +1,7 @@
 package node
 
 type Config struct {
-	DataDir string
+	DataDir   string
 	IpAddress string
-	Port    uint64
+	Port      uint64
 }

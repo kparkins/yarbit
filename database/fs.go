@@ -44,4 +44,3 @@ func writeEmptyBlocksDbToDisk(path string) error {
 	}
 	return os.Chown(path, os.Getuid(), os.Getgid())
 }
-

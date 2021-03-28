@@ -9,7 +9,7 @@ import (
 
 func balancesCommand() *cobra.Command {
 	command := &cobra.Command{
-		Use: "balances",
+		Use:   "balances",
 		Short: "Interact with balances (list...)",
 		Run: func(cmd *cobra.Command, args []string) {
 
@@ -21,7 +21,7 @@ func balancesCommand() *cobra.Command {
 
 func balancesListCommand() *cobra.Command {
 	command := &cobra.Command{
-		Use: "list",
+		Use:   "list",
 		Short: "List all balances.",
 		Run: func(cmd *cobra.Command, args []string) {
 			dataDir, _ := cmd.Flags().GetString(flagDataDir)

@@ -12,7 +12,6 @@ import (
 	"time"
 )
 
-
 func syncWithPeers(ctx context.Context, n *Node) {
 	knownPeers := n.Peers()
 	client := &http.Client{
@@ -80,7 +79,7 @@ func joinPeers(client *http.Client, address, ip string, port uint64) error {
 	return nil
 }
 
-func fetchBlocks(client *http.Client, address string, hash database.Hash) ([]database.Block, error){
+func fetchBlocks(client *http.Client, address string, hash database.Hash) ([]database.Block, error) {
 	var result SyncResult
 	url := fmt.Sprintf("%s://%s%s", "http", address, ApiRouteSync)
 

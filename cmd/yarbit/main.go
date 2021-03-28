@@ -10,7 +10,7 @@ const flagDataDir = "datadir"
 
 func main() {
 	command := &cobra.Command{
-		Use: "yarbit",
+		Use:   "yarbit",
 		Short: "The yarbit command.",
 		Run: func(cmd *cobra.Command, args []string) {
 			cmd.Help()

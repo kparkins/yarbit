@@ -30,7 +30,7 @@ func NewFileBlockStore(file string) *FileBlockStore {
 func (f *FileBlockStore) Write(blocks ...*Block) (Hash, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
-	file, err := os.OpenFile(f.file, os.O_APPEND | os.O_RDWR, os.ModePerm)
+	file, err := os.OpenFile(f.file, os.O_APPEND|os.O_RDWR, os.ModePerm)
 	if err != nil {
 		return Hash{}, err
 	}
@@ -106,7 +106,7 @@ func (f *FileBlockStore) seek(scanner *bufio.Scanner, after string) error {
 		return nil
 	}
 	var blockFileObject BlockFileEntry
-	for after != blockFileObject.Hash.String() &&  scanner.Scan() {
+	for after != blockFileObject.Hash.String() && scanner.Scan() {
 		if err := scanner.Err(); err != nil {
 			return err
 		}

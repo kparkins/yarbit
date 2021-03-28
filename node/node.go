@@ -180,7 +180,7 @@ func (n *Node) sync(ctx context.Context) {
 	}
 }
 
-func (n *Node) mine(ctx context.Context, ) {
+func (n *Node) mine(ctx context.Context) {
 	c, cancelMiner := context.WithCancel(ctx)
 	for {
 		select {

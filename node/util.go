@@ -1,6 +1,6 @@
 package node
 
-func FilterPeers(strings map[string]PeerNode, match func(s string) bool) map[string]PeerNode{
+func FilterPeers(strings map[string]PeerNode, match func(s string) bool) map[string]PeerNode {
 	out := make(map[string]PeerNode, 0)
 	for k, v := range strings {
 		if match(k) {

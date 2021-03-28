@@ -13,7 +13,7 @@ func (h Hash) String() string {
 }
 
 func (h *Hash) UnmarshalText(data []byte) error {
-	_, err :=  hex.Decode(h[:], data)
+	_, err := hex.Decode(h[:], data)
 	return err
 }
 

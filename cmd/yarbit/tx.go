@@ -15,7 +15,7 @@ const flagValue = "value"
 
 func txCommand() *cobra.Command {
 	command := &cobra.Command{
-		Use: "tx",
+		Use:   "tx",
 		Short: "Interact with txs (add...)",
 		Run: func(cmd *cobra.Command, args []string) {
 
@@ -27,13 +27,13 @@ func txCommand() *cobra.Command {
 
 func txAddCommand() *cobra.Command {
 	command := &cobra.Command{
-		Use: "add",
+		Use:   "add",
 		Short: "Add a transaction to the ledger.",
 		Run: func(cmd *cobra.Command, args []string) {
 			dataDir, _ := cmd.Flags().GetString(flagDataDir)
 			from, _ := cmd.Flags().GetString(flagFrom)
 			to, _ := cmd.Flags().GetString(flagTo)
-			value, _:= cmd.Flags().GetUint(flagValue)
+			value, _ := cmd.Flags().GetUint(flagValue)
 			data, _ := cmd.Flags().GetString(flagData)
 			state := database.NewStateFromDisk(dataDir)
 			if err := state.Load(); err != nil {
@@ -70,4 +70,3 @@ func txAddCommand() *cobra.Command {
 
 	return command
 }
-

@@ -10,7 +10,7 @@ import (
 
 func migrateCommand() *cobra.Command {
 	command := &cobra.Command{
-		Use: "migrate",
+		Use:   "migrate",
 		Short: "Run the database migration",
 		Run: func(cmd *cobra.Command, args []string) {
 			dataDir, _ := cmd.Flags().GetString(flagDataDir)
@@ -34,7 +34,7 @@ func migrateCommand() *cobra.Command {
 
 			block1 := database.NewBlock(
 				block0Hash,
-				block0.Header.Number + 1,
+				block0.Header.Number+1,
 				uint64(time.Now().Unix()),
 				[]database.Tx{
 					database.NewTx("andrej", "babayaga", 2000, ""),

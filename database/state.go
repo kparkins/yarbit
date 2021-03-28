@@ -61,9 +61,9 @@ func (s *State) Load() error {
 		return nil
 	}
 	s.hasGenesis = true
-	last := blocks[len(blocks) - 1]
+	last := blocks[len(blocks)-1]
 	hash, err := last.Hash()
-	if err != nil{
+	if err != nil {
 		return err
 	}
 	s.lastBlock = &last

@@ -1,6 +1,9 @@
 package database
 
-import "encoding/hex"
+import (
+	"bytes"
+	"encoding/hex"
+)
 
 type Hash [32]byte
 
@@ -21,4 +24,10 @@ func (h *Hash) Clone() Hash {
 	var hash Hash
 	copy(hash[:], h[:])
 	return hash
+}
+
+func (h Hash) IsEmpty() bool {
+	emptyHash := Hash{}
+
+	return bytes.Equal(emptyHash[:], h[:])
 }

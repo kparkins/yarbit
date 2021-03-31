@@ -16,6 +16,7 @@ type StatusResponse struct {
 	Hash       database.Hash       `json:"block_hash"`
 	Number     uint64              `json:"block_number"`
 	KnownPeers map[string]PeerNode `json:"known_peers"`
+	PendingTxs []database.Tx       `json:"pending_txs"`
 }
 
 type AddPeerResponse struct {
@@ -25,4 +26,11 @@ type AddPeerResponse struct {
 
 type SyncResult struct {
 	Blocks []database.Block `json:"blocks"`
+}
+
+type TxAddRequest struct {
+	From  string `json:"from"`
+	To    string `json:"to"`
+	Value uint   `json:"value"`
+	Data  string `json:"data"`
 }

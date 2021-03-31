@@ -16,7 +16,7 @@ func displayMiningProgress(attempt int32) {
 
 func mine(ctx context.Context, pending *database.Block, minedBlock chan<- *database.Block) {
 	if len(pending.Txs) <= 0 {
-		fmt.Fprintln(os.Stderr, "cannot startForeman an empty block")
+		fmt.Fprintln(os.Stderr, "cannot mine an empty block")
 		return
 	}
 	var err error

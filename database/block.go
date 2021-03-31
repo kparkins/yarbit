@@ -63,7 +63,7 @@ func (b *Block) Clone() *Block {
 	}
 }
 
-var MiningDifficulty = 1
+var MiningDifficulty = 3
 var MiningDifficultyBytes []byte
 
 func init() {

@@ -20,7 +20,8 @@ type Node struct {
 	lock          *sync.RWMutex
 	router        *mux.Router
 	state         *database.State
-	txPool        map[database.Hash]database.Tx
+	pendingTxs    map[database.Hash]database.Tx
+	completedTxs  map[database.Hash]database.Tx // TODO need to expire or write to disk periodically
 	knownPeers    map[string]PeerNode
 	server        *http.Server
 	newBlockChan  chan *database.Block
@@ -32,7 +33,8 @@ func New(config Config) *Node {
 		config:       config,
 		lock:         &sync.RWMutex{},
 		router:       mux.NewRouter(),
-		txPool:       make(map[database.Hash]database.Tx),
+		pendingTxs:   make(map[database.Hash]database.Tx),
+		completedTxs: make(map[database.Hash]database.Tx),
 		knownPeers:   make(map[string]PeerNode),
 		server:       &http.Server{},
 		newBlockChan: make(chan *database.Block),
@@ -90,12 +92,6 @@ func (n *Node) handleListBalances() http.HandlerFunc {
 }
 
 func (n *Node) handleAddTx() http.HandlerFunc {
-	type TxAddRequest struct {
-		From  string `json:"from"`
-		To    string `json:"to"`
-		Value uint   `json:"value"`
-		Data  string `json:"data"`
-	}
 	type TxAddResponse struct {
 		Hash database.Hash `json:"tx_hash"`
 	}
@@ -128,6 +124,7 @@ func (n *Node) handleNodeStatus() http.HandlerFunc {
 			Hash:       n.LatestBlockHash(),
 			Number:     n.LatestBlockNumber(),
 			KnownPeers: n.Peers(),
+			PendingTxs: n.PendingTxs(),
 		})
 	}
 }
@@ -161,11 +158,13 @@ func (n *Node) handleAddPeer() http.HandlerFunc {
 
 func (n *Node) sync(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Second)
+	c, cancel := context.WithCancel(ctx)
 	for {
 		select {
 		case <-ticker.C:
-			syncWithPeers(ctx, n)
+			syncWithPeers(c, n)
 		case <-ctx.Done():
+			cancel()
 			return
 		}
 	}
@@ -174,8 +173,8 @@ func (n *Node) sync(ctx context.Context) {
 func (n *Node) createPendingBlock() *database.Block {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
-	txs := make([]database.Tx, 0, len(n.txPool))
-	for _, tx := range n.txPool {
+	txs := make([]database.Tx, 0, len(n.pendingTxs))
+	for _, tx := range n.pendingTxs {
 		txs = append(txs, tx)
 	}
 	return &database.Block{
@@ -207,7 +206,7 @@ func (n *Node) RemoveTxs(txs []database.Tx) {
 			fmt.Println(err)
 			continue
 		}
-		delete(n.txPool, hash)
+		delete(n.pendingTxs, hash)
 	}
 }
 
@@ -223,12 +222,17 @@ func (n *Node) startForeman(ctx context.Context) {
 		case block := <-n.newBlockChan:
 			cancelMiner()
 			mining = false
+			fmt.Println("cancelling miner. adding block")
 			hash, err := n.AddBlock(block)
 			if err != nil {
 				fmt.Printf("error adding new block %s\n", hash.String())
-				continue
+				break
 			}
-			n.RemoveTxs(block.Txs)
+			fmt.Println("completing txs")
+			if err := n.CompleteTxs(block.Txs); err != nil {
+				fmt.Println(err)
+				break
+			}
 			mining, cancelMiner = n.startMiner(ctx, n.newBlockChan)
 		case <-ticker.C:
 			if mining {
@@ -309,15 +313,52 @@ func (n *Node) AddBlock(block *database.Block) (database.Hash, error) {
 	return n.state.AddBlock(block)
 }
 
+func (n *Node) CompleteTxs(txs []database.Tx) error {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+	for _, tx := range txs {
+		hash, err := tx.Hash()
+		if err != nil {
+			return err
+		}
+		n.completedTxs[hash] = tx
+		delete(n.pendingTxs, hash)
+	}
+	return nil
+}
+
 func (n *Node) AddPendingTx(tx database.Tx) (database.Hash, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
+	var hash database.Hash
 	hash, err := tx.Hash()
 	if err != nil {
-		return database.Hash{}, err
+		fmt.Printf("error hashing new tx %v\n", tx)
+		return hash, err
 	}
-	n.txPool[hash] = tx
+	if _, ok := n.completedTxs[hash]; ok {
+		return hash, nil
+	}
+	n.pendingTxs[hash] = tx
+	fmt.Printf("added tx %s\n", hash.String())
 	return hash, nil
+}
+
+func (n *Node) AddPendingTxs(txs []database.Tx) error {
+	for _, tx := range txs {
+		n.AddPendingTx(tx)
+	}
+	return nil
+}
+
+func (n *Node) PendingTxs() []database.Tx {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
+	txs := make([]database.Tx, 0, len(n.pendingTxs))
+	for _, v := range n.pendingTxs {
+		txs = append(txs, v)
+	}
+	return txs
 }
 
 func (n *Node) GetBlocksAfter(after string) ([]database.Block, error) {

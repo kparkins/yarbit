@@ -23,7 +23,7 @@ type Node struct {
 	txPool        map[database.Hash]database.Tx
 	knownPeers    map[string]PeerNode
 	server        *http.Server
-	syncedBlocks  chan *database.Block
+	newBlockChan  chan *database.Block
 	miningAccount database.Account
 }
 
@@ -35,7 +35,7 @@ func New(config Config) *Node {
 		txPool:       make(map[database.Hash]database.Tx),
 		knownPeers:   make(map[string]PeerNode),
 		server:       &http.Server{},
-		syncedBlocks: make(chan *database.Block, 100),
+		newBlockChan: make(chan *database.Block),
 	}
 	if config.Bootstrap.IpAddress != "" {
 		node.knownPeers[config.Bootstrap.SocketAddress()] = config.Bootstrap
@@ -193,7 +193,7 @@ func (n *Node) createPendingBlock() *database.Block {
 func (n *Node) startMiner(ctx context.Context, minedBlockChan chan<- *database.Block) (bool, context.CancelFunc) {
 	pendingBlock := n.createPendingBlock()
 	if len(pendingBlock.Txs) <= 0 {
-		return false, func(){}
+		return false, func() {}
 	}
 	c, cancelMiner := context.WithCancel(ctx)
 	go mine(c, pendingBlock, minedBlockChan)
@@ -213,29 +213,28 @@ func (n *Node) RemoveTxs(txs []database.Tx) {
 
 func (n *Node) startForeman(ctx context.Context) {
 	mining := false
-	cancelMiner := func(){}
+	cancelMiner := func() {}
 	ticker := time.NewTicker(10 * time.Second)
-	minedBlockChan := make(chan *database.Block, 1)
 	for {
 		select {
 		case <-ctx.Done():
 			cancelMiner()
 			return
-		case <-n.syncedBlocks:
-			mining, cancelMiner = n.startMiner(ctx, minedBlockChan)
-		case block := <-minedBlockChan:
+		case block := <-n.newBlockChan:
+			cancelMiner()
+			mining = false
 			hash, err := n.AddBlock(block)
 			if err != nil {
-				fmt.Printf("Error adding new block %s\n", hash.String())
+				fmt.Printf("error adding new block %s\n", hash.String())
 				continue
 			}
 			n.RemoveTxs(block.Txs)
-			mining, cancelMiner = n.startMiner(ctx, minedBlockChan)
+			mining, cancelMiner = n.startMiner(ctx, n.newBlockChan)
 		case <-ticker.C:
 			if mining {
 				break
 			}
-			mining, cancelMiner = n.startMiner(ctx, minedBlockChan)
+			mining, cancelMiner = n.startMiner(ctx, n.newBlockChan)
 		}
 	}
 }

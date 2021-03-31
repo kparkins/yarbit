@@ -3,15 +3,16 @@ package node
 import (
 	"context"
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/kparkins/yarbit/database"
-	"github.com/pkg/errors"
 	"net/http"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/gorilla/mux"
+	"github.com/kparkins/yarbit/database"
+	"github.com/pkg/errors"
 )
 
 type Node struct {
@@ -31,8 +32,8 @@ func New(config Config) *Node {
 		config:       config,
 		lock:         &sync.RWMutex{},
 		router:       mux.NewRouter(),
-		txPool:       make(map[database.Hash]database.Tx, 0),
-		knownPeers:   make(map[string]PeerNode, 0),
+		txPool:       make(map[database.Hash]database.Tx),
+		knownPeers:   make(map[string]PeerNode),
 		server:       &http.Server{},
 		syncedBlocks: make(chan *database.Block, 100),
 	}
@@ -60,7 +61,7 @@ func (n *Node) Run() error {
 		return errors.Wrap(err, "Failed to load state from disk.")
 	}
 	fmt.Print("Complete.\n")
-	quit := make(chan os.Signal)
+	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
@@ -68,7 +69,7 @@ func (n *Node) Run() error {
 		n.server.ListenAndServe()
 	}()
 	go n.sync(ctx)
-	go n.mine(ctx)
+	go n.startForeman(ctx)
 	<-quit
 	cancel()
 	n.server.Shutdown(ctx)
@@ -164,7 +165,6 @@ func (n *Node) sync(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			syncWithPeers(ctx, n)
-			break
 		case <-ctx.Done():
 			return
 		}
@@ -189,42 +189,34 @@ func (n *Node) createPendingBlock() *database.Block {
 		Txs: txs,
 	}
 }
-func (n *Node) mine(ctx context.Context) {
+
+func (n *Node) startMiner(ctx context.Context, minedBlockChan chan<- *database.Block) bool {
+	pendingBlock := n.createPendingBlock()
+	if len(pendingBlock.Txs) <= 0 {
+		return false
+	}
+	go mine(ctx, pendingBlock, minedBlockChan)
+	return true
+}
+
+func (n *Node) startForeman(ctx context.Context) {
 	mining := false
 	ticker := time.NewTicker(10 * time.Second)
-	minedBlock := make(chan *database.Block, 1)
+	minedBlockChan := make(chan *database.Block, 1)
 	c, cancelMiner := context.WithCancel(ctx)
 	for {
 		select {
 		case <-ctx.Done():
 			cancelMiner()
 			return
-		case block := <-n.syncedBlocks:
-			fmt.Println(*block)
-			pendingBlock := n.createPendingBlock()
-			if len(pendingBlock.Txs) <= 0 {
-				mining = false
-				break
-			}
-			go mine(c, pendingBlock, minedBlock)
-		case block := <-minedBlock:
-			fmt.Println(block)
-			pendingBlock := n.createPendingBlock()
-			if len(pendingBlock.Txs) <= 0 {
-				mining = false
-				break
-			}
-			go mine(c, pendingBlock, minedBlock)
-		case block := <-ticker.C:
+		case <-n.syncedBlocks:
+			mining = n.startMiner(c, minedBlockChan)
+		case <-minedBlockChan:
+			mining = n.startMiner(c, minedBlockChan)
+		case <-ticker.C:
 			if !mining {
 				mining = true
-				fmt.Println(block)
-				pendingBlock := n.createPendingBlock()
-				if len(pendingBlock.Txs) <= 0 {
-					mining = false
-					break
-				}
-				go mine(c, pendingBlock, minedBlock)
+				n.startMiner(c, minedBlockChan)
 			}
 		}
 	}

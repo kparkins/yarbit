@@ -68,7 +68,7 @@ var MiningDifficultyBytes []byte
 
 func init() {
 	for i := 0; i < MiningDifficulty; i++ {
-		MiningDifficultyBytes = append(MiningDifficultyBytes, 0)
+		MiningDifficultyBytes = append(MiningDifficultyBytes, byte(0))
 	}
 }
 

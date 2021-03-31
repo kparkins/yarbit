@@ -174,14 +174,14 @@ func (n *Node) sync(ctx context.Context) {
 func (n *Node) createPendingBlock() *database.Block {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
-	txs := make([]database.Tx, len(n.txPool))
+	txs := make([]database.Tx, 0, len(n.txPool))
 	for _, tx := range n.txPool {
 		txs = append(txs, tx)
 	}
 	return &database.Block{
 		Header: database.BlockHeader{
 			Parent: n.state.LatestBlockHash(),
-			Number: n.state.LatestBlockNumber(),
+			Number: n.state.NextBlockNumber(),
 			Nonce:  0,
 			Time:   uint64(time.Now().Unix()),
 			Miner:  n.config.MinerAccount,
@@ -190,34 +190,52 @@ func (n *Node) createPendingBlock() *database.Block {
 	}
 }
 
-func (n *Node) startMiner(ctx context.Context, minedBlockChan chan<- *database.Block) bool {
+func (n *Node) startMiner(ctx context.Context, minedBlockChan chan<- *database.Block) (bool, context.CancelFunc) {
 	pendingBlock := n.createPendingBlock()
 	if len(pendingBlock.Txs) <= 0 {
-		return false
+		return false, func(){}
 	}
-	go mine(ctx, pendingBlock, minedBlockChan)
-	return true
+	c, cancelMiner := context.WithCancel(ctx)
+	go mine(c, pendingBlock, minedBlockChan)
+	return true, cancelMiner
+}
+
+func (n *Node) RemoveTxs(txs []database.Tx) {
+	for _, tx := range txs {
+		hash, err := tx.Hash()
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		delete(n.txPool, hash)
+	}
 }
 
 func (n *Node) startForeman(ctx context.Context) {
 	mining := false
+	cancelMiner := func(){}
 	ticker := time.NewTicker(10 * time.Second)
 	minedBlockChan := make(chan *database.Block, 1)
-	c, cancelMiner := context.WithCancel(ctx)
 	for {
 		select {
 		case <-ctx.Done():
 			cancelMiner()
 			return
 		case <-n.syncedBlocks:
-			mining = n.startMiner(c, minedBlockChan)
-		case <-minedBlockChan:
-			mining = n.startMiner(c, minedBlockChan)
-		case <-ticker.C:
-			if !mining {
-				mining = true
-				n.startMiner(c, minedBlockChan)
+			mining, cancelMiner = n.startMiner(ctx, minedBlockChan)
+		case block := <-minedBlockChan:
+			hash, err := n.AddBlock(block)
+			if err != nil {
+				fmt.Printf("Error adding new block %s\n", hash.String())
+				continue
 			}
+			n.RemoveTxs(block.Txs)
+			mining, cancelMiner = n.startMiner(ctx, minedBlockChan)
+		case <-ticker.C:
+			if mining {
+				break
+			}
+			mining, cancelMiner = n.startMiner(ctx, minedBlockChan)
 		}
 	}
 }

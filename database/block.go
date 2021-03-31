@@ -55,7 +55,7 @@ func (b *Block) Hash() (Hash, error) {
 }
 
 func (b *Block) Clone() *Block {
-	txs := make([]Tx, len(b.Txs))
+	txs := make([]Tx, 0, len(b.Txs))
 	copy(txs, b.Txs)
 	return &Block{
 		Header: b.Header.Clone(),
@@ -63,7 +63,7 @@ func (b *Block) Clone() *Block {
 	}
 }
 
-var MiningDifficulty = 3
+var MiningDifficulty = 1
 var MiningDifficultyBytes []byte
 
 func init() {

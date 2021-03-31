@@ -7,6 +7,7 @@ import (
 	"reflect"
 )
 
+const BlockReward = 10
 const MaxBlocksPerRead = 1000
 
 type State struct {
@@ -75,7 +76,7 @@ func (s *State) GetBlocksAfter(after string) ([]Block, error) {
 	return s.blockStore.Read(after, math.MaxUint64)
 }
 
-func (s *State) nextBlockNumber() uint64 {
+func (s *State) NextBlockNumber() uint64 {
 	if !s.hasGenesis {
 		return uint64(0)
 	}
@@ -84,7 +85,7 @@ func (s *State) nextBlockNumber() uint64 {
 
 func (s *State) AddBlock(block *Block) (Hash, error) {
 	var hash Hash
-	if block.Header.Number != s.nextBlockNumber() {
+	if block.Header.Number != s.NextBlockNumber() {
 		return hash, fmt.Errorf("new block doesn't have the correct sequence number")
 	}
 	if !reflect.DeepEqual(block.Header.Parent, s.lastBlockHash) {
@@ -124,6 +125,7 @@ func applyBlock(s *State, block *Block) error {
 			return err
 		}
 	}
+	s.balances[block.Header.Miner] += BlockReward
 	return nil
 }
 

@@ -222,13 +222,11 @@ func (n *Node) startForeman(ctx context.Context) {
 		case block := <-n.newBlockChan:
 			cancelMiner()
 			mining = false
-			fmt.Println("cancelling miner. adding block")
 			hash, err := n.AddBlock(block)
 			if err != nil {
 				fmt.Printf("error adding new block %s\n", hash.String())
 				break
 			}
-			fmt.Println("completing txs")
 			if err := n.CompleteTxs(block.Txs); err != nil {
 				fmt.Println(err)
 				break
@@ -340,7 +338,6 @@ func (n *Node) AddPendingTx(tx database.Tx) (database.Hash, error) {
 		return hash, nil
 	}
 	n.pendingTxs[hash] = tx
-	fmt.Printf("added tx %s\n", hash.String())
 	return hash, nil
 }
 

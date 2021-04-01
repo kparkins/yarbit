@@ -17,10 +17,8 @@ func syncWithPeers(ctx context.Context, n *Node) {
 	client := &http.Client{
 		Timeout: 4 * time.Second,
 	}
-	fmt.Println("Sync with peers")
 	nodeAddress := fmt.Sprintf("%s:%d", n.config.IpAddress, n.config.Port)
 	for _, peer := range knownPeers {
-		fmt.Printf("peer %s\n", peer.SocketAddress())
 		peerAddress := peer.SocketAddress()
 		status, err := fetchPeerStatus(ctx, client, peerAddress)
 		if err != nil {
@@ -28,7 +26,6 @@ func syncWithPeers(ctx context.Context, n *Node) {
 			n.RemovePeer(peer)
 			continue
 		}
-		fmt.Printf("got status %v\n", status)
 		status.KnownPeers = FilterPeers(status.KnownPeers, func(s string) bool {
 			return s != nodeAddress
 		})
@@ -38,7 +35,6 @@ func syncWithPeers(ctx context.Context, n *Node) {
 			fmt.Fprintln(os.Stderr, err)
 			continue
 		}
-		fmt.Printf("latest block num %d\n", n.LatestBlockNumber())
 		if status.Number < n.LatestBlockNumber() {
 			continue
 		}

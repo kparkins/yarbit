@@ -37,6 +37,7 @@ func (m *Miner) Start(ctx context.Context) {
 		case <-m.newBlockChan:
 			cancelMiner()
 			mining = false
+			// TODO
 			/*hash, err := n.AddBlock(block)
 			if err != nil {
 				fmt.Printf("error adding new block %s\n", hash.String())
@@ -64,25 +65,6 @@ func (m *Miner) launch(ctx context.Context) (bool, context.CancelFunc) {
 	c, cancelMiner := context.WithCancel(ctx)
 	go mine(c, pendingBlock, m.newBlockChan)
 	return true, cancelMiner
-}
-
-func (n *Nod) createPendingBlock() *database.Block {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
-	txs := make([]database.Tx, 0, len(n.pendingTxs))
-	for _, tx := range n.pendingTxs {
-		txs = append(txs, tx)
-	}
-	return &database.Block{
-		Header: database.BlockHeader{
-			Parent: n.state.LatestBlockHash(),
-			Number: n.state.NextBlockNumber(),
-			Nonce:  0,
-			Time:   uint64(time.Now().Unix()),
-			Miner:  n.config.MinerAccount,
-		},
-		Txs: txs,
-	}
 }
 
 func mine(ctx context.Context, pending *database.Block, minedBlock chan<- *database.Block) {

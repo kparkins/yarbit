@@ -170,35 +170,6 @@ func (n *Node) sync(ctx context.Context) {
 	}
 }
 
-func (n *Node) createPendingBlock() *database.Block {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
-	txs := make([]database.Tx, 0, len(n.pendingTxs))
-	for _, tx := range n.pendingTxs {
-		txs = append(txs, tx)
-	}
-	return &database.Block{
-		Header: database.BlockHeader{
-			Parent: n.state.LatestBlockHash(),
-			Number: n.state.NextBlockNumber(),
-			Nonce:  0,
-			Time:   uint64(time.Now().Unix()),
-			Miner:  n.config.MinerAccount,
-		},
-		Txs: txs,
-	}
-}
-
-func (n *Node) startMiner(ctx context.Context, minedBlockChan chan<- *database.Block) (bool, context.CancelFunc) {
-	pendingBlock := n.createPendingBlock()
-	if len(pendingBlock.Txs) <= 0 {
-		return false, func() {}
-	}
-	c, cancelMiner := context.WithCancel(ctx)
-	go mine(c, pendingBlock, minedBlockChan)
-	return true, cancelMiner
-}
-
 func (n *Node) RemoveTxs(txs []database.Tx) {
 	for _, tx := range txs {
 		hash, err := tx.Hash()
@@ -207,37 +178,6 @@ func (n *Node) RemoveTxs(txs []database.Tx) {
 			continue
 		}
 		delete(n.pendingTxs, hash)
-	}
-}
-
-func (n *Node) startForeman(ctx context.Context) {
-	mining := false
-	cancelMiner := func() {}
-	ticker := time.NewTicker(10 * time.Second)
-	for {
-		select {
-		case <-ctx.Done():
-			cancelMiner()
-			return
-		case block := <-n.newBlockChan:
-			cancelMiner()
-			mining = false
-			hash, err := n.AddBlock(block)
-			if err != nil {
-				fmt.Printf("error adding new block %s\n", hash.String())
-				break
-			}
-			if err := n.CompleteTxs(block.Txs); err != nil {
-				fmt.Println(err)
-				break
-			}
-			mining, cancelMiner = n.startMiner(ctx, n.newBlockChan)
-		case <-ticker.C:
-			if mining {
-				break
-			}
-			mining, cancelMiner = n.startMiner(ctx, n.newBlockChan)
-		}
 	}
 }
 

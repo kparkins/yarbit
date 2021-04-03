@@ -2,15 +2,18 @@ package database
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
 	"math"
 	"reflect"
+	"sync"
+
+	"github.com/pkg/errors"
 )
 
 const BlockReward = 10
 const MaxBlocksPerRead = 1000
 
 type State struct {
+	sync.RWMutex
 	balances      map[Account]uint
 	dataDir       string
 	blockStore    BlockStore
@@ -33,6 +36,8 @@ func NewStateFromDisk(dataDir string) *State {
 }
 
 func (s *State) Balances() map[Account]uint {
+	s.RLock()
+	defer s.RUnlock()
 	result := make(map[Account]uint, len(s.balances))
 	for k, v := range s.balances {
 		result[k] = v
@@ -41,6 +46,8 @@ func (s *State) Balances() map[Account]uint {
 }
 
 func (s *State) Load() error {
+	s.Lock()
+	defer s.Unlock()
 	if err := initDataDir(s.dataDir); err != nil {
 		return err
 	}
@@ -73,10 +80,14 @@ func (s *State) Load() error {
 }
 
 func (s *State) GetBlocksAfter(after string) ([]Block, error) {
+	s.RLock()
+	defer s.RUnlock()
 	return s.blockStore.Read(after, math.MaxUint64)
 }
 
 func (s *State) NextBlockNumber() uint64 {
+	s.RLock()
+	defer s.RUnlock()
 	if !s.hasGenesis {
 		return uint64(0)
 	}
@@ -84,6 +95,8 @@ func (s *State) NextBlockNumber() uint64 {
 }
 
 func (s *State) AddBlock(block *Block) (Hash, error) {
+	s.Lock()
+	defer s.Unlock()
 	var hash Hash
 	if block.Header.Number != s.NextBlockNumber() {
 		return hash, fmt.Errorf("new block doesn't have the correct sequence number")
@@ -143,13 +156,19 @@ func applyTx(s *State, tx Tx) error {
 }
 
 func (s *State) LatestBlockHash() Hash {
+	s.RLock()
+	defer s.RUnlock()
 	return s.lastBlockHash
 }
 
 func (s *State) LatestBlock() *Block {
+	s.RLock()
+	defer s.RUnlock()
 	return s.lastBlock.Clone()
 }
 
 func (s *State) LatestBlockNumber() uint64 {
+	s.RLock()
+	defer s.RUnlock()
 	return s.lastBlock.Header.Number
 }

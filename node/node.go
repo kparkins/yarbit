@@ -22,7 +22,7 @@ type Node struct {
 	state         *database.State
 	pendingTxs    map[database.Hash]database.Tx
 	completedTxs  map[database.Hash]database.Tx // TODO need to expire or write to disk periodically
-	knownPeers    map[string]PeerNode
+	peering       *PeerService
 	server        *http.Server
 	newBlockChan  chan *database.Block
 	miningAccount database.Account
@@ -35,12 +35,12 @@ func New(config Config) *Node {
 		router:       mux.NewRouter(),
 		pendingTxs:   make(map[database.Hash]database.Tx),
 		completedTxs: make(map[database.Hash]database.Tx),
-		knownPeers:   make(map[string]PeerNode),
+		peering:      NewPeerService(NewPeerNode(config.IpAddress, config.Port)),
 		server:       &http.Server{},
 		newBlockChan: make(chan *database.Block),
 	}
 	if config.Bootstrap.IpAddress != "" {
-		node.knownPeers[config.Bootstrap.SocketAddress()] = config.Bootstrap
+		node.peering.AddPeer(config.Bootstrap)
 	}
 	node.routes()
 	node.server.Addr = fmt.Sprintf(":%d", node.config.Port)
@@ -70,7 +70,7 @@ func (n *Node) Run() error {
 		fmt.Printf("Listening at: %s:%d\n", n.config.IpAddress, n.config.Port)
 		n.server.ListenAndServe()
 	}()
-	go n.sync(ctx)
+	go n.peering.Start(ctx)
 	go n.startForeman(ctx)
 	<-quit
 	cancel()
@@ -123,7 +123,7 @@ func (n *Node) handleNodeStatus() http.HandlerFunc {
 		writeJsonResponse(writer, StatusResponse{
 			Hash:       n.LatestBlockHash(),
 			Number:     n.LatestBlockNumber(),
-			KnownPeers: n.Peers(),
+			KnownPeers: n.peering.Peers(),
 			PendingTxs: n.PendingTxs(),
 		})
 	}
@@ -148,25 +148,11 @@ func (n *Node) handleAddPeer() http.HandlerFunc {
 			writeJsonErrorResponse(writer, err, http.StatusBadRequest)
 			return
 		}
-		n.AddPeer(peer)
+		n.peering.AddPeer(peer)
 		writeJsonResponse(writer, AddPeerResponse{
 			Success: true,
 			Message: fmt.Sprintf("added %s to known peers", peer.SocketAddress()),
 		})
-	}
-}
-
-func (n *Node) sync(ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Second)
-	c, cancel := context.WithCancel(ctx)
-	for {
-		select {
-		case <-ticker.C:
-			syncWithPeers(c, n)
-		case <-ctx.Done():
-			cancel()
-			return
-		}
 	}
 }
 
@@ -182,20 +168,14 @@ func (n *Node) RemoveTxs(txs []database.Tx) {
 }
 
 func (n *Node) LatestBlockNumber() uint64 {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
 	return n.state.LatestBlockNumber()
 }
 
 func (n *Node) Balances() map[database.Account]uint {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
 	return n.state.Balances()
 }
 
 func (n *Node) LatestBlockHash() database.Hash {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
 	return n.state.LatestBlockHash()
 }
 
@@ -205,49 +185,7 @@ func (n *Node) Protocol() string {
 	return n.config.Protocol
 }
 
-func (n *Node) AddPeer(peer PeerNode) bool {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-	if !peer.IsActive {
-		return false
-	}
-	address := peer.SocketAddress()
-	nodeAddress := fmt.Sprintf("%s:%d", n.config.IpAddress, n.config.Port)
-	if _, ok := n.knownPeers[address]; ok || address == nodeAddress {
-		return false
-	}
-	n.knownPeers[address] = peer
-	fmt.Printf("added new peer %s\n", address)
-	return true
-}
-
-func (n *Node) AddPeers(peers map[string]PeerNode) {
-	for _, v := range peers {
-		n.AddPeer(v)
-	}
-}
-
-func (n *Node) RemovePeer(peer PeerNode) {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-	address := peer.SocketAddress()
-	delete(n.knownPeers, address)
-	fmt.Fprintf(os.Stderr, "removed %s from known peers\n", address)
-}
-
-func (n *Node) Peers() map[string]PeerNode {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
-	peers := make(map[string]PeerNode, len(n.knownPeers))
-	for k, v := range n.knownPeers {
-		peers[k] = v
-	}
-	return peers
-}
-
 func (n *Node) AddBlock(block *database.Block) (database.Hash, error) {
-	n.lock.Lock()
-	defer n.lock.Unlock()
 	return n.state.AddBlock(block)
 }
 
@@ -299,7 +237,24 @@ func (n *Node) PendingTxs() []database.Tx {
 }
 
 func (n *Node) GetBlocksAfter(after string) ([]database.Block, error) {
+	return n.state.GetBlocksAfter(after)
+}
+
+func (n *Node) createPendingBlock() *database.Block {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
-	return n.state.GetBlocksAfter(after)
+	txs := make([]database.Tx, 0, len(n.pendingTxs))
+	for _, tx := range n.pendingTxs {
+		txs = append(txs, tx)
+	}
+	return &database.Block{
+		Header: database.BlockHeader{
+			Parent: n.state.LatestBlockHash(),
+			Number: n.state.NextBlockNumber(),
+			Nonce:  0,
+			Time:   uint64(time.Now().Unix()),
+			Miner:  n.config.MinerAccount,
+		},
+		Txs: txs,
+	}
 }

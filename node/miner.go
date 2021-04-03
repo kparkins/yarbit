@@ -14,7 +14,18 @@ func displayMiningProgress(attempt int32) {
 		fmt.Printf("mining attempt %d\n", attempt)
 	}
 }
-func (n *Node) startForeman(ctx context.Context) {
+
+type Miner struct {
+	newBlockChan chan *database.Block
+}
+
+func NewMiner(blockChan chan *database.Block) *Miner {
+	return &Miner{
+		newBlockChan: blockChan,
+	}
+}
+
+func (m *Miner) Start(ctx context.Context) {
 	mining := false
 	cancelMiner := func() {}
 	ticker := time.NewTicker(10 * time.Second)
@@ -23,10 +34,10 @@ func (n *Node) startForeman(ctx context.Context) {
 		case <-ctx.Done():
 			cancelMiner()
 			return
-		case block := <-n.newBlockChan:
+		case <-m.newBlockChan:
 			cancelMiner()
 			mining = false
-			hash, err := n.AddBlock(block)
+			/*hash, err := n.AddBlock(block)
 			if err != nil {
 				fmt.Printf("error adding new block %s\n", hash.String())
 				break
@@ -34,28 +45,28 @@ func (n *Node) startForeman(ctx context.Context) {
 			if err := n.CompleteTxs(block.Txs); err != nil {
 				fmt.Println(err)
 				break
-			}
-			mining, cancelMiner = n.startMiner(ctx, n.newBlockChan)
+			}*/
+			mining, cancelMiner = m.launch(ctx)
 		case <-ticker.C:
 			if mining {
 				break
 			}
-			mining, cancelMiner = n.startMiner(ctx, n.newBlockChan)
+			mining, cancelMiner = m.launch(ctx)
 		}
 	}
 }
 
-func (n *Node) startMiner(ctx context.Context, minedBlockChan chan<- *database.Block) (bool, context.CancelFunc) {
+func (m *Miner) launch(ctx context.Context) (bool, context.CancelFunc) {
 	pendingBlock := n.createPendingBlock()
 	if len(pendingBlock.Txs) <= 0 {
 		return false, func() {}
 	}
 	c, cancelMiner := context.WithCancel(ctx)
-	go mine(c, pendingBlock, minedBlockChan)
+	go mine(c, pendingBlock, m.newBlockChan)
 	return true, cancelMiner
 }
 
-func (n *Node) createPendingBlock() *database.Block {
+func (n *Nod) createPendingBlock() *database.Block {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 	txs := make([]database.Tx, 0, len(n.pendingTxs))

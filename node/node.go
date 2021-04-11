@@ -23,12 +23,14 @@ type Node struct {
 	pendingTxs    map[database.Hash]database.Tx
 	completedTxs  map[database.Hash]database.Tx // TODO need to expire or write to disk periodically
 	peering       *PeerService
+	miner         *Miner
 	server        *http.Server
 	newBlockChan  chan *database.Block
 	miningAccount database.Account
 }
 
 func New(config Config) *Node {
+	blockChan := make(chan *database.Block)
 	node := &Node{
 		config:       config,
 		lock:         &sync.RWMutex{},
@@ -36,8 +38,9 @@ func New(config Config) *Node {
 		pendingTxs:   make(map[database.Hash]database.Tx),
 		completedTxs: make(map[database.Hash]database.Tx),
 		peering:      NewPeerService(NewPeerNode(config.IpAddress, config.Port)),
+		miner:        NewMiner(blockChan),
 		server:       &http.Server{},
-		newBlockChan: make(chan *database.Block),
+		newBlockChan: blockChan,
 	}
 	if config.Bootstrap.IpAddress != "" {
 		node.peering.AddPeer(config.Bootstrap)

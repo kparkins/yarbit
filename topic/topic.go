@@ -2,11 +2,12 @@ package feed
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"sync"
 )
 
-type Feed interface {
+type Topic interface {
 	Subscribe(chan interface{}) (Subscription, error)
 	Send(event interface{}) error
 }
@@ -16,11 +17,12 @@ type Subscription interface {
 	Err() <-chan error
 }
 
-type feed struct {
+type topic struct {
 	sync.RWMutex
 	name        string
 	valueType   reflect.Type
-	subscribers map[*subscription]bool
+	cases       []reflect.SelectCase
+	subscribers map[chan interface{}]*subscription
 }
 
 type subscription struct {
@@ -28,15 +30,16 @@ type subscription struct {
 	err     chan error
 }
 
-func NewFeed(name string) Feed {
-	return &feed{
+func NewTopic(name string) Topic {
+	return &topic{
 		name:        name,
-		subscribers: make(map[*subscription]bool),
+		subscribers: make(map[chan interface{}]*subscription),
+		cases:       make([]reflect.SelectCase, 0),
 		valueType:   nil,
 	}
 }
 
-func (f *feed) Subscribe(channel chan interface{}) (Subscription, error) {
+func (f *topic) Subscribe(channel chan interface{}) (Subscription, error) {
 	chanVal := reflect.ValueOf(channel)
 	chanType := chanVal.Type()
 
@@ -55,15 +58,38 @@ func (f *feed) Subscribe(channel chan interface{}) (Subscription, error) {
 	}
 	f.Lock()
 	defer f.Unlock()
-	f.subscribers[sub] = true
+	newCase := reflect.SelectCase {
+		Dir: reflect.SelectSend, 
+		Chan: reflect.ValueOf(channel)
+	}
+	f.subscribers[channel] = sub
+	f.cases = append(f.cases, newCase)
 	return sub, nil
 }
 
-func (f *feed) Send(event interface{}) error {
+func (f *topic) Send(event interface{}) error {
+	eventVal := reflect.ValueOf(event)
+	eventType := eventVal.Type()
+
+	if !f.checkElementType(eventType) {
+		return fmt.Errorf("cannot send event with type %v to channel with type %v", eventType, f.valueType)
+	}
+
+	cases := make([]reflect.SelectCase, len(f.cases))
+	copy(cases, f.cases)
+	for len(cases) != 0 {
+		index, _, ok := reflect.Select(cases)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "while sending to case %v", cases[index])
+		}
+		ready := cases[index].Chan
+		ready.Send(reflect.ValueOf(event))
+	}
+
 	return nil
 }
 
-func (f *feed) checkElementType(t reflect.Type) bool {
+func (f *topic) checkElementType(t reflect.Type) bool {
 	if f.valueType == nil {
 		f.valueType = t
 		return true

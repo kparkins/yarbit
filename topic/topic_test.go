@@ -9,7 +9,7 @@ import (
 )
 
 func TestFeedSubscribe(t *testing.T) {
-	feed := NewFeed("test")
+	feed := NewTopic("test")
 	ch := make(chan<- int, 0)
 	val := reflect.ValueOf(ch)
 	ctype := val.Type()

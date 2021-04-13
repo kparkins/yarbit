@@ -1,4 +1,4 @@
-package feed
+package topic
 
 import (
 	"fmt"
@@ -8,12 +8,12 @@ import (
 )
 
 type Topic interface {
-	Subscribe(chan interface{}) (Subscription, error)
+	Subscribe(channel interface{}) (Subscription, error)
 	Send(event interface{}) error
 }
 
 type Subscription interface {
-	Channel() <-chan interface{}
+	Channel() interface{}
 	Err() <-chan error
 }
 
@@ -22,24 +22,24 @@ type topic struct {
 	name        string
 	valueType   reflect.Type
 	cases       []reflect.SelectCase
-	subscribers map[chan interface{}]*subscription
+	subscribers map[interface{}]*subscription
 }
 
 type subscription struct {
-	channel chan interface{}
+	channel interface{}
 	err     chan error
 }
 
 func NewTopic(name string) Topic {
 	return &topic{
 		name:        name,
-		subscribers: make(map[chan interface{}]*subscription),
+		subscribers: make(map[interface{}]*subscription),
 		cases:       make([]reflect.SelectCase, 0),
 		valueType:   nil,
 	}
 }
 
-func (f *topic) Subscribe(channel chan interface{}) (Subscription, error) {
+func (f *topic) Subscribe(channel interface{}) (Subscription, error) {
 	chanVal := reflect.ValueOf(channel)
 	chanType := chanVal.Type()
 
@@ -58,9 +58,9 @@ func (f *topic) Subscribe(channel chan interface{}) (Subscription, error) {
 	}
 	f.Lock()
 	defer f.Unlock()
-	newCase := reflect.SelectCase {
-		Dir: reflect.SelectSend, 
-		Chan: reflect.ValueOf(channel)
+	newCase := reflect.SelectCase{
+		Dir:  reflect.SelectSend,
+		Chan: reflect.ValueOf(channel),
 	}
 	f.subscribers[channel] = sub
 	f.cases = append(f.cases, newCase)
@@ -69,14 +69,18 @@ func (f *topic) Subscribe(channel chan interface{}) (Subscription, error) {
 
 func (f *topic) Send(event interface{}) error {
 	eventVal := reflect.ValueOf(event)
-	eventType := eventVal.Type()
+	valueType := eventVal.Type()
 
-	if !f.checkElementType(eventType) {
-		return fmt.Errorf("cannot send event with type %v to channel with type %v", eventType, f.valueType)
+	if !f.checkElementType(valueType) {
+		return fmt.Errorf("cannot send event with type %v to channel with type %v", valueType, f.valueType)
 	}
 
 	cases := make([]reflect.SelectCase, len(f.cases))
 	copy(cases, f.cases)
+	for i := range cases {
+		cases[i].Send = eventVal
+	}
+
 	for len(cases) != 0 {
 		index, _, ok := reflect.Select(cases)
 		if !ok {
@@ -84,6 +88,8 @@ func (f *topic) Send(event interface{}) error {
 		}
 		ready := cases[index].Chan
 		ready.Send(reflect.ValueOf(event))
+		cases[index], cases[len(cases)-1] = cases[len(cases)-1], cases[index]
+		cases = cases[:len(cases)-1]
 	}
 
 	return nil
@@ -97,7 +103,7 @@ func (f *topic) checkElementType(t reflect.Type) bool {
 	return f.valueType == t
 }
 
-func (s *subscription) Channel() <-chan interface{} {
+func (s *subscription) Channel() interface{} {
 	return s.channel
 }
 

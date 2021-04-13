@@ -2,7 +2,6 @@ package topic
 
 import (
 	"fmt"
-	"os"
 	"reflect"
 	"sync"
 )
@@ -52,7 +51,7 @@ func (c *cases) find(channel interface{}) int {
 	return -1
 }
 
-func (c *cases) setSendValue(value interface{}) {
+func (c *cases) setSend(value interface{}) {
 	length := len(*c)
 	v := reflect.ValueOf(value)
 	for i := 0; i < length; i++ {
@@ -121,17 +120,19 @@ func (t *topic) Send(event interface{}) error {
 	t.Lock()
 	defer t.Unlock()
 	cases := t.cases
-	cases.setSendValue(event)
+	cases.setSend(event)
 	for len(cases) != 0 {
 		index, _, ok := reflect.Select(cases)
 		if !ok {
-			fmt.Fprintf(os.Stderr, "while sending to case %v", cases[index])
+			delete(t.subscribers, cases[index].Chan)
+			t.cases.remove(index)
+		} else {
+			channel := cases[index].Chan
+			channel.Send(reflect.ValueOf(event))
 		}
-		ready := cases[index].Chan
-		ready.Send(reflect.ValueOf(event))
 		cases.remove(index)
 	}
-	cases.setSendValue(struct{}{})
+	cases.setSend(struct{}{})
 
 	return nil
 }
@@ -148,6 +149,7 @@ func (t *topic) checkElementType(valueType reflect.Type) bool {
 
 func (s *subscription) Unsubscribe() {
 	s.topic.Unsubscribe(s.channel)
+	close(s.err)
 }
 
 func (s *subscription) Channel() interface{} {

@@ -123,11 +123,11 @@ func (t *topic) Send(event interface{}) error {
 	cases.setSend(event)
 	for len(cases) != 0 {
 		index, _, ok := reflect.Select(cases)
+		channel := cases[index].Chan
 		if !ok {
-			delete(t.subscribers, cases[index].Chan)
+			delete(t.subscribers, channel)
 			t.cases.remove(index)
 		} else {
-			channel := cases[index].Chan
 			channel.Send(reflect.ValueOf(event))
 		}
 		cases.remove(index)

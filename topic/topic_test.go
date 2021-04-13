@@ -8,18 +8,25 @@ import (
 
 func TestTopicSubscribe(t *testing.T) {
 	topic := NewTopic("test")
-	ch := make(chan int, 0)
+	ch := make(chan int)
+
 	_, err := topic.Subscribe(ch)
 	assert.Nil(t, err)
+
 	go topic.Send(1)
 	assert.Equal(t, 1, <-ch)
 }
 
 func TestTopicUnsubscribe(t *testing.T) {
 	topic := NewTopic("test")
-	ch := make(chan int, 0)
+	ch := make(chan int)
+
 	_, err := topic.Subscribe(ch)
 	assert.Nil(t, err)
+
 	err = topic.Unsubscribe(ch)
 	assert.Nil(t, err)
+
+	err = topic.Unsubscribe(ch)
+	assert.NotNil(t, err)
 }

@@ -74,7 +74,7 @@ func (n *Node) Run() error {
 		n.server.ListenAndServe()
 	}()
 	go n.peering.Start(ctx)
-	go n.startForeman(ctx)
+	go n.miner.Start(ctx)
 	<-quit
 	cancel()
 	n.server.Shutdown(ctx)

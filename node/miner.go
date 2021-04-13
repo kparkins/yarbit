@@ -37,16 +37,6 @@ func (m *Miner) Start(ctx context.Context) {
 		case <-m.newBlockChan:
 			cancelMiner()
 			mining = false
-			// TODO
-			/*hash, err := n.AddBlock(block)
-			if err != nil {
-				fmt.Printf("error adding new block %s\n", hash.String())
-				break
-			}
-			if err := n.CompleteTxs(block.Txs); err != nil {
-				fmt.Println(err)
-				break
-			}*/
 			mining, cancelMiner = m.launch(ctx)
 		case <-ticker.C:
 			if mining {
@@ -58,7 +48,9 @@ func (m *Miner) Start(ctx context.Context) {
 }
 
 func (m *Miner) launch(ctx context.Context) (bool, context.CancelFunc) {
-	pendingBlock := n.createPendingBlock()
+	// TODO
+	//pendingBlock := n.createPendingBlock()
+	pendingBlock := &database.Block{}
 	if len(pendingBlock.Txs) <= 0 {
 		return false, func() {}
 	}

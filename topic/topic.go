@@ -34,21 +34,22 @@ type subscription struct {
 
 type cases []reflect.SelectCase
 
-func (c *cases) remove(index int) {
-	length := len(*c)
-	(*c)[index], (*c)[length-1] = (*c)[length-1], (*c)[index]
-	*c = (*c)[:length-1]
+func (c *cases) append(s reflect.SelectCase) {
+	*c = append(*c, s)
 }
 
-func (c *cases) find(channel interface{}) int {
+func (c *cases) remove(channel interface{}) error {
+	length := len(*c)
 	address := reflect.ValueOf(channel)
-	for i := 0; i < len(*c); i++ {
+	for i := 0; i < length; i++ {
 		value := (*c)[i].Chan
 		if value == address {
-			return i
+			(*c)[i], (*c)[length-1] = (*c)[length-1], (*c)[i]
+			*c = (*c)[:length-1]
+			return nil
 		}
 	}
-	return -1
+	return fmt.Errorf("channel %v not found", channel)
 }
 
 func (c *cases) setSend(value interface{}) {
@@ -93,7 +94,7 @@ func (t *topic) Subscribe(channel interface{}) (Subscription, error) {
 		Chan: reflect.ValueOf(channel),
 	}
 	t.subscribers[channel] = sub
-	t.cases = append(t.cases, newCase)
+	t.cases.append(newCase)
 	return sub, nil
 }
 
@@ -101,12 +102,7 @@ func (t *topic) Unsubscribe(channel interface{}) error {
 	t.Lock()
 	defer t.Unlock()
 	delete(t.subscribers, channel)
-	index := t.cases.find(channel)
-	if index == -1 {
-		return fmt.Errorf("unable to remove channel")
-	}
-	t.cases.remove(index)
-	return nil
+	return t.cases.remove(channel)
 }
 
 func (t *topic) Send(event interface{}) error {
@@ -132,7 +128,6 @@ func (t *topic) Send(event interface{}) error {
 		}
 		cases.remove(index)
 	}
-	cases.setSend(struct{}{})
 
 	return nil
 }

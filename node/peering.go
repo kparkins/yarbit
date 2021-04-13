@@ -105,7 +105,7 @@ func (p *PeerService) mingle(ctx context.Context) {
 			fmt.Fprintln(os.Stderr, err)
 			continue
 		}
-		latestHash := n.LatestBlockHash()
+		/*latestHash := n.LatestBlockHash()
 		if (status.Number == 0 && !latestHash.IsEmpty()) || status.Number < n.LatestBlockNumber() {
 			continue
 		}
@@ -116,7 +116,7 @@ func (p *PeerService) mingle(ctx context.Context) {
 		}
 		for i := range blocks {
 			n.newBlockChan <- &blocks[i]
-		}
+		}*/
 
 	}
 

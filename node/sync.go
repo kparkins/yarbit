@@ -1,3 +1,13 @@
+package node
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+
+	"github.com/kparkins/yarbit/database"
+	"github.com/pkg/errors"
+)
 
 func fetchBlocks(ctx context.Context, client *http.Client, address string, hash database.Hash) ([]database.Block, error) {
 	var result SyncResult

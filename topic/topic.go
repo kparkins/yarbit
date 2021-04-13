@@ -21,7 +21,7 @@ type topic struct {
 	sync.RWMutex
 	name        string
 	valueType   reflect.Type
-	cases       []reflect.SelectCase
+	cases       cases
 	subscribers map[interface{}]*subscription
 }
 
@@ -30,11 +30,28 @@ type subscription struct {
 	err     chan error
 }
 
+type cases []reflect.SelectCase
+
+func (c *cases) remove(index int) {
+	length := len(*c)
+	(*c)[index], (*c)[length-1] = (*c)[length-1], (*c)[index]
+	*c = (*c)[:length-1]
+}
+
+func (c *cases) setSendValue(value interface{}) {
+	length := len(*c)
+	v := reflect.ValueOf(value)
+	for i := 0; i < length; i++ {
+		(*c)[i].Send = v
+
+	}
+}
+
 func NewTopic(name string) Topic {
 	return &topic{
 		name:        name,
 		subscribers: make(map[interface{}]*subscription),
-		cases:       make([]reflect.SelectCase, 0),
+		cases:       cases{},
 		valueType:   nil,
 	}
 }
@@ -68,19 +85,15 @@ func (f *topic) Subscribe(channel interface{}) (Subscription, error) {
 }
 
 func (f *topic) Send(event interface{}) error {
-	eventVal := reflect.ValueOf(event)
-	valueType := eventVal.Type()
+	value := reflect.ValueOf(event)
+	valueType := value.Type()
 
 	if !f.checkElementType(valueType) {
 		return fmt.Errorf("cannot send event with type %v to channel with type %v", valueType, f.valueType)
 	}
 
-	cases := make([]reflect.SelectCase, len(f.cases))
-	copy(cases, f.cases)
-	for i := range cases {
-		cases[i].Send = eventVal
-	}
-
+	cases := f.cases
+	cases.setSendValue(value)
 	for len(cases) != 0 {
 		index, _, ok := reflect.Select(cases)
 		if !ok {
@@ -88,9 +101,9 @@ func (f *topic) Send(event interface{}) error {
 		}
 		ready := cases[index].Chan
 		ready.Send(reflect.ValueOf(event))
-		cases[index], cases[len(cases)-1] = cases[len(cases)-1], cases[index]
-		cases = cases[:len(cases)-1]
+		cases.remove(index)
 	}
+	cases.setSendValue(struct{}{})
 
 	return nil
 }

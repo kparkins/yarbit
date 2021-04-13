@@ -8,11 +8,13 @@ import (
 )
 
 type Topic interface {
+	Unsubscribe(channel interface{}) error
 	Subscribe(channel interface{}) (Subscription, error)
 	Send(event interface{}) error
 }
 
 type Subscription interface {
+	Unsubscribe()
 	Channel() interface{}
 	Err() <-chan error
 }
@@ -26,6 +28,7 @@ type topic struct {
 }
 
 type subscription struct {
+	topic   *topic
 	channel interface{}
 	err     chan error
 }
@@ -38,12 +41,22 @@ func (c *cases) remove(index int) {
 	*c = (*c)[:length-1]
 }
 
+func (c *cases) find(channel interface{}) int {
+	address := reflect.ValueOf(channel)
+	for i := 0; i < len(*c); i++ {
+		value := (*c)[i].Chan
+		if value == address {
+			return i
+		}
+	}
+	return -1
+}
+
 func (c *cases) setSendValue(value interface{}) {
 	length := len(*c)
 	v := reflect.ValueOf(value)
 	for i := 0; i < length; i++ {
 		(*c)[i].Send = v
-
 	}
 }
 
@@ -56,7 +69,7 @@ func NewTopic(name string) Topic {
 	}
 }
 
-func (f *topic) Subscribe(channel interface{}) (Subscription, error) {
+func (t *topic) Subscribe(channel interface{}) (Subscription, error) {
 	chanVal := reflect.ValueOf(channel)
 	chanType := chanVal.Type()
 
@@ -66,34 +79,49 @@ func (f *topic) Subscribe(channel interface{}) (Subscription, error) {
 	if chanType.ChanDir() != reflect.BothDir && chanType.ChanDir() != reflect.SendDir {
 		return nil, fmt.Errorf("channel used for subscription must allow sending")
 	}
-	if !f.checkElementType(chanType.Elem()) {
-		return nil, fmt.Errorf("incorrect element type given to feed %s", f.name)
+	if !t.checkElementType(chanType.Elem()) {
+		return nil, fmt.Errorf("incorrect element type given to feed %s", t.name)
 	}
 	sub := &subscription{
+		topic:   t,
 		channel: channel,
 		err:     make(chan error, 1),
 	}
-	f.Lock()
-	defer f.Unlock()
+	t.Lock()
+	defer t.Unlock()
 	newCase := reflect.SelectCase{
 		Dir:  reflect.SelectSend,
 		Chan: reflect.ValueOf(channel),
 	}
-	f.subscribers[channel] = sub
-	f.cases = append(f.cases, newCase)
+	t.subscribers[channel] = sub
+	t.cases = append(t.cases, newCase)
 	return sub, nil
 }
 
-func (f *topic) Send(event interface{}) error {
+func (t *topic) Unsubscribe(channel interface{}) error {
+	t.Lock()
+	defer t.Unlock()
+	delete(t.subscribers, channel)
+	index := t.cases.find(channel)
+	if index == -1 {
+		return fmt.Errorf("unable to remove channel")
+	}
+	t.cases.remove(index)
+	return nil
+}
+
+func (t *topic) Send(event interface{}) error {
 	value := reflect.ValueOf(event)
 	valueType := value.Type()
 
-	if !f.checkElementType(valueType) {
-		return fmt.Errorf("cannot send event with type %v to channel with type %v", valueType, f.valueType)
+	if !t.checkElementType(valueType) {
+		return fmt.Errorf("cannot send event with type %v to channel with type %v", valueType, t.valueType)
 	}
 
-	cases := f.cases
-	cases.setSendValue(value)
+	t.Lock()
+	defer t.Unlock()
+	cases := t.cases
+	cases.setSendValue(event)
 	for len(cases) != 0 {
 		index, _, ok := reflect.Select(cases)
 		if !ok {
@@ -108,12 +136,18 @@ func (f *topic) Send(event interface{}) error {
 	return nil
 }
 
-func (f *topic) checkElementType(t reflect.Type) bool {
-	if f.valueType == nil {
-		f.valueType = t
+func (t *topic) checkElementType(valueType reflect.Type) bool {
+	t.Lock()
+	defer t.Unlock()
+	if t.valueType == nil {
+		t.valueType = valueType
 		return true
 	}
-	return f.valueType == t
+	return t.valueType == valueType
+}
+
+func (s *subscription) Unsubscribe() {
+	s.topic.Unsubscribe(s.channel)
 }
 
 func (s *subscription) Channel() interface{} {

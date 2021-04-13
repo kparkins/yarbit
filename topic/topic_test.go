@@ -14,3 +14,12 @@ func TestTopicSubscribe(t *testing.T) {
 	go topic.Send(1)
 	assert.Equal(t, 1, <-ch)
 }
+
+func TestTopicUnsubscribe(t *testing.T) {
+	topic := NewTopic("test")
+	ch := make(chan int, 0)
+	_, err := topic.Subscribe(ch)
+	assert.Nil(t, err)
+	err = topic.Unsubscribe(ch)
+	assert.Nil(t, err)
+}

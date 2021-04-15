@@ -8,7 +8,6 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/kparkins/yarbit/database"
@@ -20,8 +19,6 @@ type Node struct {
 	lock          *sync.RWMutex
 	router        *mux.Router
 	state         *database.State
-	pendingTxs    map[database.Hash]database.Tx
-	completedTxs  map[database.Hash]database.Tx // TODO need to expire or write to disk periodically
 	peering       *PeerService
 	miner         *Miner
 	server        *http.Server
@@ -35,8 +32,6 @@ func New(config Config) *Node {
 		config:       config,
 		lock:         &sync.RWMutex{},
 		router:       mux.NewRouter(),
-		pendingTxs:   make(map[database.Hash]database.Tx),
-		completedTxs: make(map[database.Hash]database.Tx),
 		peering:      NewPeerService(NewPeerNode(config.IpAddress, config.Port)),
 		miner:        NewMiner(blockChan),
 		server:       &http.Server{},
@@ -106,18 +101,18 @@ func (n *Node) handleAddTx() http.HandlerFunc {
 			return
 		}
 		defer request.Body.Close()
-		tx := database.NewTx(
+		/*tx := database.NewTx(
 			database.NewAccount(txRequest.From),
 			database.NewAccount(txRequest.To),
 			txRequest.Value,
 			txRequest.Data,
-		)
-		hash, err := n.AddPendingTx(tx)
+		)*/
+		/*hash, err := n.AddPendingTx(tx)
 		if err != nil {
 			writeJsonErrorResponse(writer, err, http.StatusInternalServerError)
 			return
-		}
-		writeJsonResponse(writer, TxAddResponse{Hash: hash})
+		}*/
+		writeJsonResponse(writer, TxAddResponse{Hash: database.Hash{}})
 	}
 }
 
@@ -127,7 +122,8 @@ func (n *Node) handleNodeStatus() http.HandlerFunc {
 			Hash:       n.LatestBlockHash(),
 			Number:     n.LatestBlockNumber(),
 			KnownPeers: n.peering.Peers(),
-			PendingTxs: n.PendingTxs(),
+			// TODO
+			//PendingTxs: n.PendingTxs(),
 		})
 	}
 }
@@ -159,17 +155,6 @@ func (n *Node) handleAddPeer() http.HandlerFunc {
 	}
 }
 
-func (n *Node) RemoveTxs(txs []database.Tx) {
-	for _, tx := range txs {
-		hash, err := tx.Hash()
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-		delete(n.pendingTxs, hash)
-	}
-}
-
 func (n *Node) LatestBlockNumber() uint64 {
 	return n.state.LatestBlockNumber()
 }
@@ -192,72 +177,6 @@ func (n *Node) AddBlock(block *database.Block) (database.Hash, error) {
 	return n.state.AddBlock(block)
 }
 
-func (n *Node) CompleteTxs(txs []database.Tx) error {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-	for _, tx := range txs {
-		hash, err := tx.Hash()
-		if err != nil {
-			return err
-		}
-		n.completedTxs[hash] = tx
-		delete(n.pendingTxs, hash)
-	}
-	return nil
-}
-
-func (n *Node) AddPendingTx(tx database.Tx) (database.Hash, error) {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-	var hash database.Hash
-	hash, err := tx.Hash()
-	if err != nil {
-		fmt.Printf("error hashing new tx %v\n", tx)
-		return hash, err
-	}
-	if _, ok := n.completedTxs[hash]; ok {
-		return hash, nil
-	}
-	n.pendingTxs[hash] = tx
-	return hash, nil
-}
-
-func (n *Node) AddPendingTxs(txs []database.Tx) error {
-	for _, tx := range txs {
-		n.AddPendingTx(tx)
-	}
-	return nil
-}
-
-func (n *Node) PendingTxs() []database.Tx {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
-	txs := make([]database.Tx, 0, len(n.pendingTxs))
-	for _, v := range n.pendingTxs {
-		txs = append(txs, v)
-	}
-	return txs
-}
-
 func (n *Node) GetBlocksAfter(after string) ([]database.Block, error) {
 	return n.state.GetBlocksAfter(after)
-}
-
-func (n *Node) createPendingBlock() *database.Block {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
-	txs := make([]database.Tx, 0, len(n.pendingTxs))
-	for _, tx := range n.pendingTxs {
-		txs = append(txs, tx)
-	}
-	return &database.Block{
-		Header: database.BlockHeader{
-			Parent: n.state.LatestBlockHash(),
-			Number: n.state.NextBlockNumber(),
-			Nonce:  0,
-			Time:   uint64(time.Now().Unix()),
-			Miner:  n.config.MinerAccount,
-		},
-		Txs: txs,
-	}
 }

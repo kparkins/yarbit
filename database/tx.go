@@ -11,7 +11,7 @@ type Tx struct {
 	To    Account   `json:"to"`
 	Value uint      `json:"value"`
 	Data  string    `json:"data"`
-	Time  time.Time `json:"time"`
+	Time  uint64 `json:"time"`
 }
 
 func NewTx(from, to Account, value uint, data string) Tx {
@@ -20,6 +20,7 @@ func NewTx(from, to Account, value uint, data string) Tx {
 		To:    to,
 		Value: value,
 		Data:  data,
+		Time: uint64(time.Now().Unix()),
 	}
 }
 

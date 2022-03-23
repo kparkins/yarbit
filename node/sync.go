@@ -5,11 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/kparkins/yarbit/database"
-	"github.com/pkg/errors"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/kparkins/yarbit/database"
+	"github.com/pkg/errors"
 )
 
 func syncWithPeers(ctx context.Context, n *Node) {
@@ -30,7 +31,12 @@ func syncWithPeers(ctx context.Context, n *Node) {
 			return s != nodeAddress
 		})
 		n.AddPeers(status.KnownPeers)
-		n.AddPendingTxs(status.PendingTxs)
+		for _, tx := range status.PendingTxs {
+			hash, err := n.AddPendingTx(tx)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Unable to add TX %v from peer %v: %v", hash, peerAddress, err)
+			}
+		}
 		if err := joinPeers(ctx, client, peerAddress, n.config.IpAddress, n.config.Port); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			continue
@@ -99,7 +105,6 @@ func fetchBlocks(ctx context.Context, client *http.Client, address string, hash 
 	if err != nil {
 		return result.Blocks, errors.Wrap(err, "while creating request")
 	}
-	fmt.Println("Fetching blocks")
 	query := req.URL.Query()
 	query.Set(ApiQueryParamAfter, hash.String())
 	req.URL.RawQuery = query.Encode()
@@ -113,6 +118,8 @@ func fetchBlocks(ctx context.Context, client *http.Client, address string, hash 
 	if err := readJsonResponse(response, &result); err != nil {
 		return result.Blocks, errors.Wrap(err, "error reading blocks in response")
 	}
-	fmt.Printf("got blocks %v\n", result.Blocks)
+	if len(result.Blocks) > 0 {
+		fmt.Printf("New blocks %v\n", result.Blocks)
+	}
 	return result.Blocks, nil
 }

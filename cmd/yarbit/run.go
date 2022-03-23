@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/kparkins/yarbit/node"
-	"github.com/spf13/cobra"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/kparkins/yarbit/node"
+	"github.com/spf13/cobra"
 )
 
 const flagIp = "ip"
@@ -36,7 +37,7 @@ func runCommand() *cobra.Command {
 				Port:         port,
 				Protocol:     "http",
 				Bootstrap:    bootstrap,
-				MinerAccount: "kyle",
+				MinerAccount: "miner",
 			}
 			server := node.New(config)
 			err := server.Run()

@@ -14,10 +14,10 @@ debug:
 	go build -gcflags="all=-N -l" ./cmd/yarbit
 
 run: build
-	./yarbit run --datadir=data
+	./yarbit run --datadir=data --port=8080
 
 status:
-	curl -s 127.0.0.1:8080/node/status
+	curl -s 127.0.0.1:8080/node/status | jq
 
 balances:
 	curl -s 127.0.0.1:8080/balances/list | jq

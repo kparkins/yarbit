@@ -2,9 +2,10 @@ package database
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
 	"math"
 	"reflect"
+
+	"github.com/pkg/errors"
 )
 
 const BlockReward = 10
@@ -54,7 +55,7 @@ func (s *State) Load() error {
 		return errors.Wrap(err, "failed to load blocks from block store")
 	}
 	for _, block := range blocks {
-		if err := applyBlock(s, &block); err != nil {
+		if err := s.ApplyBlock(&block); err != nil {
 			return errors.Wrap(err, "failed to apply block")
 		}
 	}
@@ -91,8 +92,8 @@ func (s *State) AddBlock(block *Block) (Hash, error) {
 	if !reflect.DeepEqual(block.Header.Parent, s.lastBlockHash) {
 		return hash, fmt.Errorf("new block doesn't have the correct parent hash")
 	}
-	c := s.clone()
-	if err := applyBlock(c, block); err != nil {
+	c := s.Clone()
+	if err := c.ApplyBlock(block); err != nil {
 		return hash, errors.Wrap(err, "failed to apply block")
 	}
 	hash, err := s.blockStore.Write(block)
@@ -108,7 +109,7 @@ func (s *State) AddBlock(block *Block) (Hash, error) {
 	return hash, nil
 }
 
-func (s *State) clone() *State {
+func (s *State) Clone() *State {
 	return &State{
 		balances:      s.Balances(),
 		dataDir:       s.dataDir,
@@ -119,9 +120,9 @@ func (s *State) clone() *State {
 	}
 }
 
-func applyBlock(s *State, block *Block) error {
+func (s *State)ApplyBlock(block *Block) error {
 	for _, tx := range block.Txs {
-		if err := applyTx(s, tx); err != nil {
+		if err := s.ApplyTx(tx); err != nil {
 			return err
 		}
 	}
@@ -129,13 +130,14 @@ func applyBlock(s *State, block *Block) error {
 	return nil
 }
 
-func applyTx(s *State, tx Tx) error {
+func (s *State) ApplyTx(tx Tx) error {
 	if tx.IsReward() {
 		s.balances[tx.To] += tx.Value
 		return nil
 	}
+	txHash, _ := tx.Hash()
 	if s.balances[tx.From] < tx.Value {
-		return fmt.Errorf("insufficient balance")
+		return fmt.Errorf("TX: %s insufficient balance", txHash)
 	}
 	s.balances[tx.From] -= tx.Value
 	s.balances[tx.To] += tx.Value

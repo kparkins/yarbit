@@ -20,6 +20,7 @@ type Node struct {
 	lock          *sync.RWMutex
 	router        *mux.Router
 	state         *database.State
+	pendingState  *database.State
 	pendingTxs    map[database.Hash]database.Tx
 	completedTxs  map[database.Hash]database.Tx // TODO need to expire or write to disk periodically
 	knownPeers    map[string]PeerNode
@@ -63,6 +64,7 @@ func (n *Node) Run() error {
 		return errors.Wrap(err, "Failed to load state from disk.")
 	}
 	fmt.Print("Complete.\n")
+	n.pendingState = n.state.Clone()
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -111,7 +113,7 @@ func (n *Node) handleAddTx() http.HandlerFunc {
 		)
 		hash, err := n.AddPendingTx(tx)
 		if err != nil {
-			writeJsonErrorResponse(writer, err, http.StatusInternalServerError)
+			writeJsonErrorResponse(writer, err, http.StatusBadRequest)
 			return
 		}
 		writeJsonResponse(writer, TxAddResponse{Hash: hash})
@@ -191,6 +193,7 @@ func (n *Node) createPendingBlock() *database.Block {
 
 func (n *Node) startMiner(ctx context.Context, minedBlockChan chan<- *database.Block) (bool, context.CancelFunc) {
 	pendingBlock := n.createPendingBlock()
+	fmt.Printf("pending block: %s\n", pendingBlock.DebugString())
 	if len(pendingBlock.Txs) <= 0 {
 		return false, func() {}
 	}
@@ -224,7 +227,7 @@ func (n *Node) startForeman(ctx context.Context) {
 			mining = false
 			hash, err := n.AddBlock(block)
 			if err != nil {
-				fmt.Printf("error adding new block %s\n", hash.String())
+				fmt.Printf("error adding new block %s : %s\n", hash.String(), err)
 				break
 			}
 			if err := n.CompleteTxs(block.Txs); err != nil {
@@ -337,15 +340,14 @@ func (n *Node) AddPendingTx(tx database.Tx) (database.Hash, error) {
 	if _, ok := n.completedTxs[hash]; ok {
 		return hash, nil
 	}
+	if _, ok := n.pendingTxs[hash]; ok {
+		return hash, nil
+	}
+	if err := n.pendingState.ApplyTx(tx); err != nil {
+		return hash, err 
+	}
 	n.pendingTxs[hash] = tx
 	return hash, nil
-}
-
-func (n *Node) AddPendingTxs(txs []database.Tx) error {
-	for _, tx := range txs {
-		n.AddPendingTx(tx)
-	}
-	return nil
 }
 
 func (n *Node) PendingTxs() []database.Tx {

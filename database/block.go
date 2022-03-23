@@ -46,6 +46,26 @@ func NewBlock(parent Hash, number, time uint64, txs []Tx) *Block {
 	}
 }
 
+func (b *Block) DebugString() string {
+	txs := make([]Hash, 0)
+	for _, tx := range b.Txs {
+		if hash, err := tx.Hash(); err != nil {
+			txs = append(txs, hash)
+		}
+	}
+	out := struct {
+		Header BlockHeader `json:"header"`
+		Hashes    []Hash        `json:"payload"`
+	} {
+		Header: b.Header,
+		Hashes: txs,
+	}
+	if json, err := json.Marshal(&out); err == nil {
+		return string(json) 
+	}
+	return "" 
+}
+
 func (b *Block) Hash() (Hash, error) {
 	encoded, err := json.Marshal(*b)
 	if err != nil {
